@@ -10,7 +10,7 @@ const H    = {"apikey":KEY,"Authorization":`Bearer ${KEY}`,"Content-Type":"appli
 const db = {
   getOrders:   ()       => fetch(`${SUPA}/rest/v1/orders?select=*&order=created_at.desc`,{headers:H}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
   insertOrder: d        => fetch(`${SUPA}/rest/v1/orders`,{method:"POST",headers:H,body:JSON.stringify(d)}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
-  patchOrder:  (id,d)   => fetch(`${SUPA}/rest/v1/orders?id=eq.${id}`,{method:"PATCH",headers:H,body:JSON.stringify(d)}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
+  patchOrder:  (id,d)   => fetch(`${SUPA}/rest/v1/orders?id=eq.${id}`,{method:"PATCH",headers:H,body:JSON.stringify(d)}).then(r=>r.ok?Promise.resolve():r.text().then(t=>Promise.reject(t))),
   uploadFile:  async (f,path) => {
     const encoded = path.split("/").map(encodeURIComponent).join("/");
     const r = await fetch(`${SUPA}/storage/v1/object/papers/${encoded}`,{method:"POST",headers:{"apikey":KEY,"Authorization":`Bearer ${KEY}`,"Content-Type":f.type||"application/octet-stream"},body:f});
@@ -238,7 +238,7 @@ export default function App() {
         const ext=f=>f.name.split('.').pop().replace(/[^a-zA-Z0-9]/g,'').toLowerCase()||'bin';
         const ip=instrFile?await db.uploadFile(instrFile,`${orderId}/instructions.${ext(instrFile)}`):null;
         const pp=paperFile?await db.uploadFile(paperFile,`${orderId}/paper.${ext(paperFile)}`):null;
-        if(ip||pp) await db.patchOrder(orderId,{instructions_path:ip,paper_path:pp}).catch(()=>{});
+        if(ip||pp) await db.patchOrder(orderId,{instructions_path:ip,paper_path:pp});
       } catch(e){ fileError=String(e); }
       setSubmitted(true);
       if(fileError) setTimeout(()=>alert("⚠️ ההגשה נשמרה אבל הקבצים לא הועלו:\n"+fileError),300);
