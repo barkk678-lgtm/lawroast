@@ -107,7 +107,14 @@ function Drawer({ order, onClose, onStatusChange }) {
   const remaining=(order.submittedAt+order.plan.hours*3600000)-Date.now();
   const isUrg=remaining<3*3600000&&order.status!=="נשלח משוב";
   const st=SS[order.status];
-  const send=async()=>{ setPhase(1); await new Promise(r=>setTimeout(r,1300)); setPhase(2); await new Promise(r=>setTimeout(r,1300)); setPhase(3); onStatusChange(order.id,"נשלח משוב"); };
+  const send=async()=>{
+    setPhase(1); await new Promise(r=>setTimeout(r,1300));
+    setPhase(2); await new Promise(r=>setTimeout(r,1300));
+    setPhase(3);
+    onStatusChange(order.id,"נשלח משוב");
+    const fUrl=order.paper_path?`${SUPA}/storage/v1/object/public/papers/${order.paper_path}`:null;
+    fetch('/api/send-feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:order.name,email:order.email,course:order.course,feedback:roast,fileUrl:fUrl})}).catch(()=>{});
+  };
   const fileUrl = path => path ? `${SUPA}/storage/v1/object/public/papers/${path}` : null;
   const instrName = order.instructions_path ? order.instructions_path.split("/").pop() : `הנחיות_${order.course}.pdf`;
   const paperName = order.paper_path ? order.paper_path.split("/").pop() : `עבודה_${order.name.split(" ")[0]}.docx`;
@@ -254,7 +261,6 @@ export default function App() {
         const pp=paperFile?await db.uploadFile(paperFile,`${orderId}/paper.${ext(paperFile)}`):null;
         if(ip||pp) await db.patchOrder(orderId,{instructions_path:ip,paper_path:pp});
       } catch(e){ fileError=String(e); }
-           } catch(e){ fileError=String(e); }
       fetch('/api/send-confirmation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:form.name,email:form.email,course:form.course,planId:selPlan,orderId})}).catch(()=>{});
       setSubmitted(true);
       if(fileError) setTimeout(()=>alert("⚠️ ההגשה נשמרה אבל הקבצים לא הועלו:\n"+fileError),300);
