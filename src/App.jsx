@@ -235,8 +235,9 @@ export default function App() {
       });
       let fileError = null;
       try {
-        const ip=instrFile?await db.uploadFile(instrFile,`${orderId}/instructions_${instrFile.name}`):null;
-        const pp=paperFile?await db.uploadFile(paperFile,`${orderId}/paper_${paperFile.name}`):null;
+        const ext=f=>f.name.split('.').pop().replace(/[^a-zA-Z0-9]/g,'').toLowerCase()||'bin';
+        const ip=instrFile?await db.uploadFile(instrFile,`${orderId}/instructions.${ext(instrFile)}`):null;
+        const pp=paperFile?await db.uploadFile(paperFile,`${orderId}/paper.${ext(paperFile)}`):null;
         if(ip||pp) await db.patchOrder(orderId,{instructions_path:ip,paper_path:pp}).catch(()=>{});
       } catch(e){ fileError=String(e); }
       setSubmitted(true);
