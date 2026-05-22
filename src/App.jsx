@@ -11,7 +11,12 @@ const db = {
   getOrders:   ()       => fetch(`${SUPA}/rest/v1/orders?select=*&order=created_at.desc`,{headers:H}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
   insertOrder: d        => fetch(`${SUPA}/rest/v1/orders`,{method:"POST",headers:H,body:JSON.stringify(d)}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
   patchOrder:  (id,d)   => fetch(`${SUPA}/rest/v1/orders?id=eq.${id}`,{method:"PATCH",headers:H,body:JSON.stringify(d)}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
-  uploadFile:  (f,path) => fetch(`${SUPA}/storage/v1/object/papers/${path.split("/").map(encodeURIComponent).join("/")}`,{method:"POST",headers:{"apikey":KEY,"Authorization":`Bearer ${KEY}`,"Content-Type":f.type||"application/octet-stream"},body:f}).then(r=>r.ok?path:null).catch(()=>null),
+  uploadFile:  async (f,path) => {
+    const encoded = path.split("/").map(encodeURIComponent).join("/");
+    const r = await fetch(`${SUPA}/storage/v1/object/papers/${encoded}`,{method:"POST",headers:{"apikey":KEY,"Authorization":`Bearer ${KEY}`,"Content-Type":f.type||"application/octet-stream"},body:f});
+    if(!r.ok){ const err=await r.text(); throw new Error(`Storage ${r.status}: ${err}`); }
+    return path;
+  },
 };
 
 /* ── Plans ── */
@@ -178,6 +183,7 @@ export default function App() {
   const [form,setForm]=useState({name:"",email:"",gender:"",institution:"",year:"",course:"",notes:""});
   const [instrFile,setInstrFile]=useState(null), [paperFile,setPaperFile]=useState(null);
   const [hovP,setHovP]=useState(null), [btnHov,setBtnHov]=useState(false);
+  const [formError,setFormError]=useState(null);
   const instrRef=useRef(), paperRef=useRef(), formRef=useRef();
 
   // Timers
@@ -214,22 +220,31 @@ export default function App() {
   };
 
   const handleSubmit=async()=>{
-    if(!selPlan||submitting) return;
+    if(submitting) return;
+    if(!selPlan){ setFormError("⚠️ אנא בחר מסלול לפני השליחה"); return; }
+    if(!form.name.trim()){ setFormError("⚠️ אנא מלא שם מלא"); return; }
+    if(!form.email.trim()){ setFormError("⚠️ אנא מלא כתובת מייל"); return; }
+    setFormError(null);
     setSubmitting(true);
     try {
-      const [row]=await db.insertOrder({
-        name:form.name, email:form.email, gender:form.gender,
+      const orderId = crypto.randomUUID();
+      await db.insertOrder({
+        id:orderId, name:form.name, email:form.email, gender:form.gender,
         institution:form.institution, year:form.year, course:form.course,
         plan_id:selPlan, notes:form.notes, status:"התקבל"
       });
-      if(row?.id){
-        const ip=instrFile?await db.uploadFile(instrFile,`${row.id}/instructions_${instrFile.name}`):null;
-        const pp=paperFile?await db.uploadFile(paperFile,`${row.id}/paper_${paperFile.name}`):null;
-        if(ip||pp) await db.patchOrder(row.id,{instructions_path:ip,paper_path:pp}).catch(()=>{});
-      }
+      let fileError = null;
+      try {
+        const ip=instrFile?await db.uploadFile(instrFile,`${orderId}/instructions_${instrFile.name}`):null;
+        const pp=paperFile?await db.uploadFile(paperFile,`${orderId}/paper_${paperFile.name}`):null;
+        if(ip||pp) await db.patchOrder(orderId,{instructions_path:ip,paper_path:pp}).catch(()=>{});
+      } catch(e){ fileError=String(e); }
       setSubmitted(true);
-    } catch(e){ alert("שגיאה בשליחה — "+e+"\nאנא נסה שוב."); }
-    finally { setSubmitting(false); }
+      if(fileError) setTimeout(()=>alert("⚠️ ההגשה נשמרה אבל הקבצים לא הועלו:\n"+fileError),300);
+    } catch(e){
+      const msg=typeof e==="string"?e:(e?.message||JSON.stringify(e));
+      setFormError("❌ שגיאה בשליחה: "+msg);
+    } finally { setSubmitting(false); }
   };
 
   const activeOrders=orders.filter(o=>o.status!=="נשלח משוב");
@@ -591,6 +606,7 @@ export default function App() {
                   </div>
                 ))}
               </div>
+              {formError&&<div style={{background:"rgba(220,38,38,.07)",border:"1px solid rgba(220,38,38,.25)",borderRadius:"10px",padding:"12px 16px",fontSize:"13px",color:"#b91c1c",fontWeight:600,fontFamily:"'Heebo',sans-serif",direction:"rtl"}}>{formError}</div>}
               <button onClick={handleSubmit} disabled={submitting} onMouseEnter={()=>!submitting&&setBtnHov(true)} onMouseLeave={()=>setBtnHov(false)}
                 style={{width:"100%",padding:"17px",borderRadius:"13px",border:"none",background:"linear-gradient(135deg,#dc2626,#f97316)",color:"#fff",fontFamily:"'Heebo',sans-serif",fontWeight:900,fontSize:"18px",cursor:submitting?"not-allowed":"pointer",opacity:submitting?0.8:btnHov?0.9:1,transform:!submitting&&btnHov?"scale(1.015)":"scale(1)",transition:"all .18s",boxShadow:btnHov&&!submitting?"0 12px 36px rgba(220,38,38,.38)":"0 4px 18px rgba(220,38,38,.22)",marginTop:"4px",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px"}}>
                 {submitting
