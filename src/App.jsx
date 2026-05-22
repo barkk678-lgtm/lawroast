@@ -1,0 +1,615 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from "recharts";
+import { LogOut, Clock, CheckCircle, Upload, X, Users, Flame, Mail, Search, RefreshCw } from "lucide-react";
+
+/* ── Supabase ── */
+const SUPA = "https://iohmakgsmmrjssacmmvx.supabase.co";
+const KEY  = "sb_publishable_6BamgDCcnhBq1r1JJ28M8Q_nkb7qKeu";
+const H    = {"apikey":KEY,"Authorization":`Bearer ${KEY}`,"Content-Type":"application/json","Prefer":"return=representation"};
+
+const db = {
+  getOrders:   ()       => fetch(`${SUPA}/rest/v1/orders?select=*&order=created_at.desc`,{headers:H}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
+  insertOrder: d        => fetch(`${SUPA}/rest/v1/orders`,{method:"POST",headers:H,body:JSON.stringify(d)}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
+  patchOrder:  (id,d)   => fetch(`${SUPA}/rest/v1/orders?id=eq.${id}`,{method:"PATCH",headers:H,body:JSON.stringify(d)}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
+  uploadFile:  (f,path) => fetch(`${SUPA}/storage/v1/object/papers/${encodeURIComponent(path)}`,{method:"POST",headers:{"apikey":KEY,"Authorization":`Bearer ${KEY}`,"Content-Type":f.type||"application/octet-stream"},body:f}).then(r=>r.ok?path:null).catch(()=>null),
+};
+
+/* ── Plans ── */
+const PLANS = [
+  { id:1, name:"סטנדרטי", price:120, hours:120, accent:"#818cf8", glowBg:"rgba(129,140,248,0.09)", glowBorder:"rgba(129,140,248,0.5)", tagline:"לא דחוף? גם אנחנו לא ממהרים", features:['בדיקה ע"י עו"ד מנוסה','הערות כתובות מפורטות','ניתוח חוזקות וחולשות','כתישה בטון נעים'] },
+  { id:2, name:"מהיר", price:150, hours:72, accent:"#fb923c", glowBg:"rgba(251,146,60,0.09)", glowBorder:"rgba(251,146,60,0.5)", tagline:"כי הדד-ליין מתקרב ואתה יודע את זה", features:['בדיקה ע"י עו"ד מנוסה','הערות כתובות מפורטות','ניתוח חוזקות וחולשות','כתישה בטון נעים','עדיפות בתור'] },
+  { id:3, name:"SOS 🔥", price:200, hours:36, accent:"#ef4444", glowBg:"rgba(239,68,68,0.09)", glowBorder:"rgba(239,68,68,0.55)", tagline:"ההגשה מחר? אנחנו לא שופטים. קצת כן.", features:['בדיקה ע"י עו"ד מנוסה','הערות כתובות מפורטות','ניתוח חוזקות וחולשות','כתישה בטון נעים','עדיפות מקסימלית'], recommended:true },
+];
+const INSTS   = ["אוניברסיטת תל אביב","אוניברסיטת בר אילן","אוניברסיטת חיפה","אוניברסיטת רייכמן","המכללה למנהל"];
+const YEARS   = ["שנה א'","שנה ב'","שנה ג'","שנה ד'"];
+const COURSES = ["משפט חוקתי","דיני חוזים","משפט עונשין"];
+const GENDERS = ["גבר","אישה","אחר"];
+const fmtPlanTime = h => h < 48 ? `${h} שעות` : `${Math.floor(h/24)} ימים`;
+
+const SS = {
+  "התקבל":    {color:"#64748b",bg:"rgba(100,116,139,0.09)",border:"rgba(100,116,139,0.28)"},
+  "בבדיקה":   {color:"#d97706",bg:"rgba(217,119,6,0.09)",  border:"rgba(217,119,6,0.3)"},
+  "נשלח משוב":{color:"#16a34a",bg:"rgba(22,163,74,0.09)",  border:"rgba(22,163,74,0.3)"},
+};
+
+const fmtMs = ms => {
+  if (ms<=0) return "⏰ פג";
+  const h=Math.floor(ms/3600000), m=Math.floor((ms%3600000)/60000), s=Math.floor((ms%60000)/1000);
+  if (h>=48) return `${Math.floor(h/24)}ד ${h%24}ש`;
+  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+};
+
+const rowToOrder = r => ({
+  id: r.id, name: r.name||"", email: r.email||"", gender: r.gender||"",
+  institution: r.institution||"", year: r.year||"", course: r.course||"",
+  plan: PLANS.find(p=>p.id===r.plan_id)||PLANS[0],
+  notes: r.notes||"",
+  submittedAt: new Date(r.created_at).getTime(),
+  status: r.status||"התקבל",
+  instructions_path: r.instructions_path||null,
+  paper_path: r.paper_path||null,
+});
+
+const css = `
+@import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+::-webkit-scrollbar{width:5px;background:#f1f5f9}
+::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:3px}
+.fi{background:#f5f1eb;border:1px solid #ddd6cc;color:#1a1510;border-radius:10px;padding:12px 14px;font-family:'Heebo',sans-serif;font-size:14px;width:100%;direction:rtl;outline:none;transition:all .2s;display:block}
+.fi:focus{border-color:#dc2626;box-shadow:0 0 0 3px rgba(220,38,38,.1)}
+.fi::placeholder{color:#a09890}
+select.fi option{background:#fff;color:#1a1510}
+textarea.fi{resize:vertical}
+.fiw{background:#fff;border:1px solid #e2e8f0;color:#1e293b;border-radius:9px;padding:10px 13px;font-family:'Heebo',sans-serif;font-size:13px;width:100%;direction:rtl;outline:none;transition:border-color .2s;display:block}
+.fiw:focus{border-color:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.08)}
+.fiw::placeholder{color:#94a3b8}
+select.fiw option{background:#fff;color:#1e293b}
+textarea.fiw{resize:vertical}
+.lbl{display:block;font-size:11px;color:#78716c;margin-bottom:6px;font-weight:700;letter-spacing:.04em}
+.lblw{display:block;font-size:10px;color:#94a3b8;margin-bottom:5px;font-weight:700;letter-spacing:.05em}
+.gc2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:520px){.gc2{grid-template-columns:1fr}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes slideIn{from{transform:translateX(110%)}to{transform:translateX(0)}}
+.puls{animation:pulse 1s ease-in-out infinite}
+.spin-a{animation:spin .7s linear infinite}
+.fin{animation:fadeIn .3s ease}
+.sin{animation:slideIn .38s cubic-bezier(.16,1,.3,1)}
+.trow:hover td{background:#f8fafc!important}
+`;
+
+/* ── Drawer ── */
+function Drawer({ order, onClose, onStatusChange }) {
+  const [roast,setRoast]=useState(""), [phase,setPhase]=useState(0), [ffile,setFfile]=useState(null);
+  const [,setTick]=useState(0); const fref=useRef();
+  useEffect(()=>{ const id=setInterval(()=>setTick(t=>t+1),1000); return ()=>clearInterval(id); },[]);
+  const remaining=(order.submittedAt+order.plan.hours*3600000)-Date.now();
+  const isUrg=remaining<3*3600000&&order.status!=="נשלח משוב";
+  const st=SS[order.status];
+  const send=async()=>{ setPhase(1); await new Promise(r=>setTimeout(r,1300)); setPhase(2); await new Promise(r=>setTimeout(r,1300)); setPhase(3); onStatusChange(order.id,"נשלח משוב"); };
+
+  const fileUrl = (path) => path ? `${SUPA}/storage/v1/object/public/papers/${encodeURIComponent(path)}` : null;
+  const instrName = order.instructions_path ? order.instructions_path.split("/").pop() : `הנחיות_${order.course}.pdf`;
+  const paperName = order.paper_path ? order.paper_path.split("/").pop() : `עבודה_${order.name.split(" ")[0]}.docx`;
+
+  return (
+    <>
+      <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.38)",zIndex:200,backdropFilter:"blur(3px)"}}/>
+      <div className="sin" style={{position:"fixed",top:0,left:0,bottom:0,width:"min(520px,100vw)",background:"#f8fafc",borderRight:"1px solid #e2e8f0",zIndex:201,overflowY:"auto",direction:"rtl",boxShadow:"4px 0 28px rgba(0,0,0,.09)"}}>
+        <div style={{padding:"22px",fontFamily:"'Heebo',sans-serif"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"18px"}}>
+            <div><h2 style={{fontWeight:900,fontSize:"18px",margin:"0 0 2px",color:"#0f172a"}}>{order.name}</h2><div style={{fontSize:"12px",color:"#64748b"}}>{order.email}</div></div>
+            <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+              <span style={{background:st.bg,border:`1px solid ${st.border}`,color:st.color,borderRadius:"100px",padding:"4px 12px",fontSize:"11px",fontWeight:700}}>{order.status}</span>
+              <button onClick={onClose} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:"8px",padding:"7px",cursor:"pointer",color:"#64748b",display:"flex"}}><X size={15}/></button>
+            </div>
+          </div>
+          <div style={{background:"#fff",borderRadius:"12px",padding:"15px",marginBottom:"14px",border:"1px solid #e2e8f0",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
+            <div className="gc2" style={{gap:"11px"}}>
+              {[["מוסד",order.institution],["שנה",order.year],["קורס",order.course],["מסלול",`${order.plan.name} · ₪${order.plan.price}`]].map(([k,v])=>(
+                <div key={k}><div className="lblw">{k}</div><div style={{fontSize:"13px",color:"#1e293b",fontWeight:600}}>{v}</div></div>
+              ))}
+            </div>
+            {order.notes&&<div style={{marginTop:"12px",paddingTop:"12px",borderTop:"1px solid #f1f5f9"}}><div className="lblw">💬 הערות הסטודנט</div><div style={{fontSize:"13px",color:"#475569",lineHeight:1.65,fontStyle:"italic"}}>"{order.notes}"</div></div>}
+          </div>
+          {order.status!=="נשלח משוב"&&<div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px",background:isUrg?"rgba(239,68,68,.06)":"#fff",borderRadius:"9px",padding:"10px 13px",border:`1px solid ${isUrg?"rgba(239,68,68,.22)":"#e2e8f0"}`}}>
+            <Clock size={13} color={isUrg?"#ef4444":"#94a3b8"}/><span style={{fontSize:"12px",color:"#64748b"}}>זמן שנותר:</span>
+            <span className={isUrg?"puls":""} style={{fontFamily:"monospace",fontWeight:700,fontSize:"14px",color:isUrg?"#ef4444":"#0f172a"}}>{fmtMs(remaining)}</span>
+            {isUrg&&<span style={{marginRight:"auto",fontSize:"11px",color:"#ef4444",fontWeight:700}}>🚨 דחוף!</span>}
+          </div>}
+          <div style={{marginBottom:"14px"}}><div className="lblw">📁 קבצים שהועלו</div>
+            {[{name:instrName,url:fileUrl(order.instructions_path),ico:"📋"},{name:paperName,url:fileUrl(order.paper_path),ico:"📄"}].map((f,i)=>(
+              <a key={i} href={f.url||undefined} target="_blank" rel="noreferrer" style={{display:"flex",alignItems:"center",gap:"8px",padding:"8px 11px",background:"#fff",borderRadius:"8px",marginBottom:"5px",border:"1px solid #e2e8f0",textDecoration:"none"}}>
+                <span style={{fontSize:"14px"}}>{f.ico}</span>
+                <span style={{fontSize:"12px",color:f.url?"#6366f1":"#475569",textDecoration:f.url?"underline":"none"}}>{f.name}</span>
+                {f.url&&<span style={{marginRight:"auto",fontSize:"10px",color:"#94a3b8"}}>⬇ הורד</span>}
+              </a>
+            ))}
+          </div>
+          <div style={{marginBottom:"14px"}}><label className="lblw">✍️ אזור הכתישה — המשוב שלך</label>
+            <textarea className="fiw" rows={5} placeholder={`כתוב כאן את המשוב המפורט עבור ${order.name}.\nזכור: אנחנו כותשים — בטון נעים.`} value={roast} onChange={e=>setRoast(e.target.value)} style={{lineHeight:1.7}}/>
+          </div>
+          <div style={{marginBottom:"20px"}}><label className="lblw">📎 העלה עבודה בדוקה</label>
+            <div onClick={()=>fref.current?.click()} style={{border:`2px dashed ${ffile?"#16a34a":"#cbd5e1"}`,borderRadius:"10px",padding:"12px",textAlign:"center",cursor:"pointer",background:"#fff",color:ffile?"#16a34a":"#94a3b8",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px"}}>
+              <Upload size={14}/><span style={{fontSize:"12px",fontWeight:600}}>{ffile?ffile.name:"לחץ להעלאת הקובץ הבדוק"}</span>
+            </div>
+            <input ref={fref} type="file" style={{display:"none"}} onChange={e=>setFfile(e.target.files[0])}/>
+          </div>
+          {phase===0&&<button onClick={send} style={{width:"100%",padding:"14px",borderRadius:"11px",border:"none",background:"linear-gradient(135deg,#dc2626,#f97316)",color:"#fff",fontFamily:"'Heebo',sans-serif",fontWeight:900,fontSize:"15px",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:"8px",boxShadow:"0 4px 14px rgba(220,38,38,.24)"}}><Mail size={15}/> שלח משוב וקובץ בדוק לסטודנט</button>}
+          {(phase===1||phase===2)&&<div style={{textAlign:"center",padding:"18px",background:"#fff",borderRadius:"12px",border:"1px solid #e2e8f0"}}>
+            <div className="spin-a" style={{width:"24px",height:"24px",border:"3px solid #e2e8f0",borderTop:`3px solid ${phase===1?"#ef4444":"#fb923c"}`,borderRadius:"50%",margin:"0 auto 11px"}}/>
+            <div style={{color:"#64748b",fontSize:"13px",fontFamily:"'Heebo',sans-serif",marginBottom:"11px"}}>{phase===1?"מכין מייל...":"מצרף קבצים..."}</div>
+            <div style={{height:"4px",background:"#f1f5f9",borderRadius:"2px",overflow:"hidden"}}><div style={{height:"100%",background:phase===1?"#ef4444":"#fb923c",width:phase===1?"40%":"80%",borderRadius:"2px",transition:"width .8s ease"}}/></div>
+          </div>}
+          {phase===3&&<div className="fin" style={{background:"rgba(22,163,74,.06)",border:"1px solid rgba(22,163,74,.25)",borderRadius:"12px",padding:"20px",textAlign:"center",fontFamily:"'Heebo',sans-serif"}}>
+            <CheckCircle size={32} color="#16a34a" style={{margin:"0 auto 9px",display:"block"}}/>
+            <div style={{fontWeight:900,fontSize:"16px",color:"#16a34a",marginBottom:"5px"}}>האוטומציה הופעלה בהצלחה! 🎉</div>
+            <div style={{fontSize:"12px",color:"#64748b",marginBottom:"3px"}}>המייל נשלח לכתובת:</div>
+            <div style={{fontSize:"14px",color:"#0f172a",fontWeight:700}}>{order.email}</div>
+          </div>}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ── App ── */
+export default function App() {
+  const [view,setView]=useState("landing"), [adminTab,setAdminTab]=useState("live");
+  const [loginOpen,setLoginOpen]=useState(false);
+  const [uname,setUname]=useState(""), [pwd,setPwd]=useState(""), [lerr,setLerr]=useState("");
+  const [orders,setOrders]=useState([]), [sel,setSel]=useState(null);
+  const [,setTick]=useState(0);
+
+  // DB state
+  const [dbLoading,setDbLoading]=useState(false);
+  const [dbError,setDbError]=useState(null);
+  const [lastSync,setLastSync]=useState(null);
+  const [submitting,setSubmitting]=useState(false);
+
+  // Table filters
+  const [chartFilter,setChartFilter]=useState(null), [tableSearch,setTableSearch]=useState("");
+  const [statusFilter,setStatusFilter]=useState(""), [colSort,setColSort]=useState({col:"deadline",dir:"asc"});
+
+  // Landing form
+  const [selPlan,setSelPlan]=useState(null), [submitted,setSubmitted]=useState(false);
+  const [form,setForm]=useState({name:"",email:"",gender:"",institution:"",year:"",course:"",notes:""});
+  const [instrFile,setInstrFile]=useState(null), [paperFile,setPaperFile]=useState(null);
+  const [hovP,setHovP]=useState(null), [btnHov,setBtnHov]=useState(false);
+  const instrRef=useRef(), paperRef=useRef(), formRef=useRef();
+
+  // Timers
+  useEffect(()=>{ const id=setInterval(()=>setTick(t=>t+1),1000); return ()=>clearInterval(id); },[]);
+
+  // Load orders from Supabase
+  const loadOrders = useCallback(async () => {
+    setDbLoading(true); setDbError(null);
+    try {
+      const rows = await db.getOrders();
+      setOrders(rows.map(rowToOrder));
+      setLastSync(Date.now());
+    } catch(e) {
+      setDbError("שגיאת התחברות לשרת — " + (typeof e==="string"?e:"בדוק חיבור ומפתח API"));
+    } finally { setDbLoading(false); }
+  }, []);
+
+  useEffect(()=>{
+    if (view!=="admin") return;
+    loadOrders();
+    const id=setInterval(loadOrders, 20000);
+    return ()=>clearInterval(id);
+  }, [view, loadOrders]);
+
+  const doLogin=()=>{
+    if(uname==="admin"&&pwd==="1234"){setLoginOpen(false);setView("admin");setLerr("");setUname("");setPwd("");}
+    else setLerr("פרטים שגויים.");
+  };
+
+  const updateStatus=(id,status)=>{
+    setOrders(o=>o.map(x=>x.id===id?{...x,status}:x));
+    setSel(s=>s?.id===id?{...s,status}:s);
+    db.patchOrder(id,{status}).catch(e=>console.error("patch failed",e));
+  };
+
+  const handleSubmit=async()=>{
+    if(!selPlan||submitting) return;
+    setSubmitting(true);
+    try {
+      const [row]=await db.insertOrder({
+        name:form.name, email:form.email, gender:form.gender,
+        institution:form.institution, year:form.year, course:form.course,
+        plan_id:selPlan, notes:form.notes, status:"התקבל"
+      });
+      if(row?.id){
+        const ip=instrFile?await db.uploadFile(instrFile,`${row.id}/instructions_${instrFile.name}`):null;
+        const pp=paperFile?await db.uploadFile(paperFile,`${row.id}/paper_${paperFile.name}`):null;
+        if(ip||pp) await db.patchOrder(row.id,{instructions_path:ip,paper_path:pp}).catch(()=>{});
+      }
+      setSubmitted(true);
+    } catch(e){ alert("שגיאה בשליחה — "+e+"\nאנא נסה שוב."); }
+    finally { setSubmitting(false); }
+  };
+
+  const activeOrders=orders.filter(o=>o.status!=="נשלח משוב");
+  const archivedOrders=orders.filter(o=>o.status==="נשלח משוב");
+  const revenue=activeOrders.reduce((s,o)=>s+o.plan.price,0);
+  const inProg=activeOrders.filter(o=>o.status==="בבדיקה").length;
+  const urgCnt=activeOrders.filter(o=>o.plan.hours===36).length;
+
+  const planData=PLANS.map(p=>({name:p.name.replace(" 🔥",""),planId:p.id,fill:p.accent,הזמנות:activeOrders.filter(o=>o.plan.id===p.id).length}));
+  const courseData=COURSES.map(c=>({name:c.replace("משפט ","מ. ").replace("דיני ","ד. "),fullCourse:c,הכנסות:activeOrders.filter(o=>o.course===c).reduce((s,o)=>s+o.plan.price,0)}));
+  const today0=new Date(); today0.setHours(0,0,0,0);
+  const weeklyData=Array.from({length:7},(_,i)=>{
+    const ds=new Date(today0.getTime()); ds.setDate(ds.getDate()+i);
+    const de=new Date(ds.getTime()); de.setDate(de.getDate()+1);
+    const dayNames=["א'","ב'","ג'","ד'","ה'","ו'","ש'"];
+    return {name:`יום ${dayNames[ds.getDay()]}`,dayStart:ds.getTime(),dayEnd:de.getTime(),עבודות:activeOrders.filter(o=>{const dl=o.submittedAt+o.plan.hours*3600000;return dl>=ds.getTime()&&dl<de.getTime();}).length};
+  });
+
+  const handleChartClick=(type,data)=>{
+    if(type==="plan"){if(chartFilter?.type==="plan"&&chartFilter.planId===data.planId)setChartFilter(null);else setChartFilter({type:"plan",planId:data.planId,label:data.name});}
+    else if(type==="course"){if(chartFilter?.type==="course"&&chartFilter.course===data.fullCourse)setChartFilter(null);else setChartFilter({type:"course",course:data.fullCourse,label:data.name});}
+    else if(type==="day"){if(chartFilter?.type==="day"&&chartFilter.dayStart===data.dayStart)setChartFilter(null);else setChartFilter({type:"day",dayStart:data.dayStart,dayEnd:data.dayEnd,label:data.name});}
+  };
+  const handleColSort=col=>setColSort(s=>s.col===col?{col,dir:s.dir==="asc"?"desc":"asc"}:{col,dir:"asc"});
+
+  let displayOrders=[...activeOrders];
+  if(chartFilter?.type==="plan") displayOrders=displayOrders.filter(o=>o.plan.id===chartFilter.planId);
+  if(chartFilter?.type==="course") displayOrders=displayOrders.filter(o=>o.course===chartFilter.course);
+  if(chartFilter?.type==="day") displayOrders=displayOrders.filter(o=>{const dl=o.submittedAt+o.plan.hours*3600000;return dl>=chartFilter.dayStart&&dl<chartFilter.dayEnd;});
+  if(tableSearch) displayOrders=displayOrders.filter(o=>o.name.includes(tableSearch)||o.email.includes(tableSearch)||o.institution.includes(tableSearch));
+  if(statusFilter) displayOrders=displayOrders.filter(o=>o.status===statusFilter);
+  displayOrders.sort((a,b)=>{
+    const m=colSort.dir==="asc"?1:-1;
+    if(colSort.col==="name") return a.name.localeCompare(b.name,"he")*m;
+    if(colSort.col==="institution") return a.institution.localeCompare(b.institution,"he")*m;
+    if(colSort.col==="course") return a.course.localeCompare(b.course,"he")*m;
+    if(colSort.col==="price") return (a.plan.price-b.plan.price)*m;
+    return ((a.submittedAt+a.plan.hours*3600000)-(b.submittedAt+b.plan.hours*3600000))*m;
+  });
+
+  const SortInd=({col})=><span style={{fontSize:"9px",marginLeft:"3px",color:colSort.col===col?"#6366f1":"#cbd5e1"}}>{colSort.col===col?(colSort.dir==="asc"?"▲":"▼"):"⇅"}</span>;
+  const ttStyle={background:"#fff",border:"1px solid #e2e8f0",borderRadius:"8px",fontFamily:"Heebo",color:"#1e293b",fontSize:11,boxShadow:"0 4px 12px rgba(0,0,0,.07)"};
+  const hasFilters=chartFilter||tableSearch||statusFilter;
+  const syncAgo=lastSync?Math.floor((Date.now()-lastSync)/1000):null;
+
+  /* ── ADMIN ── */
+  if(view==="admin") return (
+    <>
+      <style>{css}</style>
+      {sel&&<Drawer order={sel} onClose={()=>setSel(null)} onStatusChange={updateStatus}/>}
+      <div dir="rtl" style={{background:"#f1f5f9",minHeight:"100vh",fontFamily:"'Heebo',sans-serif",color:"#1e293b"}}>
+        <header style={{background:"#fff",borderBottom:"1px solid #e2e8f0",padding:"0 20px",display:"flex",alignItems:"center",justifyContent:"space-between",height:"54px",position:"sticky",top:0,zIndex:100,boxShadow:"0 1px 4px rgba(0,0,0,.05)"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"14px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:"7px"}}><span style={{fontSize:"18px"}}>🔥</span><span style={{fontWeight:900,fontSize:"16px",color:"#0f172a"}}>LawRoast</span></div>
+            <div style={{display:"flex",gap:"2px",background:"#f1f5f9",borderRadius:"8px",padding:"3px"}}>
+              {[["live","📊 לייב"],["archive","📁 ארכיון"]].map(([t,l])=>(
+                <button key={t} onClick={()=>setAdminTab(t)} style={{padding:"5px 14px",borderRadius:"6px",border:"none",background:adminTab===t?"#fff":"transparent",color:adminTab===t?"#0f172a":"#64748b",fontFamily:"'Heebo',sans-serif",fontSize:"12px",fontWeight:700,cursor:"pointer",boxShadow:adminTab===t?"0 1px 4px rgba(0,0,0,.07)":"none",transition:"all .15s",display:"flex",alignItems:"center",gap:"4px"}}>
+                  {l}{t==="archive"&&archivedOrders.length>0&&<span style={{background:"#e2e8f0",borderRadius:"100px",padding:"1px 7px",fontSize:"10px",color:"#64748b"}}>{archivedOrders.length}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+            {syncAgo!==null&&!dbLoading&&<span style={{fontSize:"10px",color:"#94a3b8"}}>{syncAgo<10?"עודכן זה עתה":`עודכן לפני ${syncAgo}ש׳`}</span>}
+            {dbLoading&&<div className="spin-a" style={{width:"14px",height:"14px",border:"2px solid #e2e8f0",borderTop:"2px solid #6366f1",borderRadius:"50%",flexShrink:0}}/>}
+            <button onClick={loadOrders} title="רענן" style={{display:"flex",alignItems:"center",gap:"5px",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#64748b",borderRadius:"7px",padding:"6px 10px",cursor:"pointer",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700}}><RefreshCw size={12}/></button>
+            <button onClick={()=>setView("landing")} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(220,38,38,.06)",border:"1px solid rgba(220,38,38,.2)",color:"#dc2626",borderRadius:"8px",padding:"7px 12px",cursor:"pointer",fontFamily:"'Heebo',sans-serif",fontSize:"12px",fontWeight:700}}><LogOut size={13}/> התנתק</button>
+          </div>
+        </header>
+
+        <main style={{padding:"20px",maxWidth:"1280px",margin:"0 auto"}}>
+          {dbError&&<div style={{background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.22)",borderRadius:"10px",padding:"12px 16px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"10px",fontFamily:"'Heebo',sans-serif"}}>
+            <span style={{fontSize:"16px"}}>⚠️</span>
+            <span style={{fontSize:"12px",color:"#dc2626",flex:1}}>{dbError}</span>
+            <button onClick={loadOrders} style={{background:"rgba(220,38,38,.08)",border:"1px solid rgba(220,38,38,.2)",borderRadius:"6px",padding:"4px 10px",color:"#dc2626",fontSize:"11px",fontWeight:700,cursor:"pointer",fontFamily:"'Heebo',sans-serif"}}>נסה שוב</button>
+          </div>}
+
+          {adminTab==="live"&&<>
+            {/* KPIs */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:"11px",marginBottom:"16px"}}>
+              {[
+                {emoji:"💸",label:"כסף שעשית מלעשות לאנשים רע לב",val:`₪${revenue}`,color:"#16a34a",bg:"rgba(22,163,74,.07)",border:"rgba(22,163,74,.22)"},
+                {icon:<Users size={17} color="#6366f1"/>,label:"עבודות פעילות",val:activeOrders.length,color:"#6366f1",bg:"rgba(99,102,241,.07)",border:"rgba(99,102,241,.22)"},
+                {icon:<Clock size={17} color="#d97706"/>,label:"עבודות בטיפול",val:inProg,color:"#d97706",bg:"rgba(217,119,6,.07)",border:"rgba(217,119,6,.22)"},
+                {icon:<Flame size={17} color="#dc2626"/>,label:"הזמנות SOS דחופות",val:urgCnt,color:"#dc2626",bg:"rgba(220,38,38,.07)",border:"rgba(220,38,38,.22)"},
+              ].map((k,i)=>(
+                <div key={i} style={{background:k.bg,border:`1px solid ${k.border}`,borderRadius:"11px",padding:"15px 17px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"10px"}}>{k.emoji?<span style={{fontSize:"17px"}}>{k.emoji}</span>:k.icon}<span style={{fontSize:"10px",color:"#94a3b8",textAlign:"left",maxWidth:"90px",lineHeight:1.4}}>{k.label}</span></div>
+                  <div style={{fontSize:"1.85rem",fontWeight:900,color:k.color}}>{k.val}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Charts */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"11px",marginBottom:"16px"}}>
+              {[
+                {title:"📊 התפלגות מסלולים",data:planData,dk:"הזמנות",type:"plan",colored:true,fmtLbl:v=>v,fmtTip:v=>[v,"הזמנות"]},
+                {title:"💰 הכנסות לפי קורס",data:courseData,dk:"הכנסות",type:"course",color:"#6366f1",colored:false,fmtLbl:v=>"₪"+v,fmtTip:v=>["₪"+v,"הכנסות"]},
+                {title:"📅 עומס שבועי",data:weeklyData,dk:"עבודות",type:"day",color:"#6366f1",colored:false,weekly:true,fmtLbl:v=>v,fmtTip:v=>[v,"עבודות"]},
+              ].map((ch,ci)=>(
+                <div key={ci} style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:"12px",padding:"15px",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
+                  <div style={{fontWeight:700,fontSize:"12px",marginBottom:"13px",color:"#64748b",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <span>{ch.title}</span>
+                    {chartFilter?.type===ch.type&&<span style={{fontSize:"10px",color:"#ef4444",cursor:"pointer",fontWeight:700}} onClick={()=>setChartFilter(null)}>× נקה</span>}
+                  </div>
+                  <ResponsiveContainer width="100%" height={140}>
+                    <BarChart data={ch.data} margin={{top:18,right:4,left:-22,bottom:0}}>
+                      <XAxis dataKey="name" tick={{fill:"#94a3b8",fontSize:9,fontFamily:"Heebo"}} axisLine={false} tickLine={false}/>
+                      <YAxis tick={{fill:"#94a3b8",fontSize:9}} axisLine={false} tickLine={false} allowDecimals={false}/>
+                      <Tooltip contentStyle={ttStyle} cursor={{fill:"rgba(99,102,241,.04)"}} formatter={ch.fmtTip}/>
+                      <Bar dataKey={ch.dk} radius={[4,4,0,0]} style={{cursor:"pointer"}} onClick={d=>handleChartClick(ch.type,d)}>
+                        <LabelList dataKey={ch.dk} position="top" style={{fill:"#475569",fontSize:11,fontFamily:"Heebo",fontWeight:700}} formatter={ch.fmtLbl}/>
+                        {ch.data.map((e,j)=>{
+                          let fill=ch.colored?e.fill:(ch.weekly&&j===0?"#f97316":ch.color);
+                          const dim=chartFilter?.type===ch.type&&(ch.type==="plan"?chartFilter.planId!==e.planId:ch.type==="course"?chartFilter.course!==e.fullCourse:chartFilter.dayStart!==e.dayStart);
+                          const act=chartFilter?.type===ch.type&&(ch.type==="plan"?chartFilter.planId===e.planId:ch.type==="course"?chartFilter.course===e.fullCourse:chartFilter.dayStart===e.dayStart);
+                          return <Cell key={j} fill={act?"#ef4444":fill} opacity={dim?0.3:1}/>;
+                        })}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ))}
+            </div>
+
+            {/* Table */}
+            <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:"12px",overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
+              <div style={{padding:"13px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"8px"}}>
+                <h3 style={{fontWeight:900,fontSize:"14px",color:"#0f172a"}}>🔥 Live Tasks</h3>
+                <div style={{display:"flex",gap:"7px",alignItems:"center",flexWrap:"wrap"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:"5px",background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:"7px",padding:"5px 9px"}}>
+                    <Search size={11} color="#94a3b8"/>
+                    <input value={tableSearch} onChange={e=>setTableSearch(e.target.value)} placeholder="חיפוש..." style={{background:"none",border:"none",outline:"none",fontSize:"11px",color:"#1e293b",fontFamily:"'Heebo',sans-serif",width:"90px",direction:"rtl"}}/>
+                  </div>
+                  <select value={statusFilter} onChange={e=>setStatusFilter(e.target.value)} style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:"7px",padding:"5px 9px",fontFamily:"'Heebo',sans-serif",fontSize:"11px",color:statusFilter?SS[statusFilter]?.color:"#64748b",fontWeight:700,cursor:"pointer",outline:"none"}}>
+                    <option value="">כל הסטטוסים</option><option value="התקבל">התקבל</option><option value="בבדיקה">בבדיקה</option>
+                  </select>
+                  {hasFilters&&<button onClick={()=>{setChartFilter(null);setTableSearch("");setStatusFilter("");}} style={{padding:"5px 9px",borderRadius:"7px",border:"1px solid rgba(220,38,38,.28)",background:"rgba(220,38,38,.06)",color:"#dc2626",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700,cursor:"pointer"}}>× נקה</button>}
+                </div>
+              </div>
+              {chartFilter&&<div style={{padding:"7px 16px",background:"#f8fafc",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:"6px"}}><span style={{fontSize:"11px",color:"#64748b",fontFamily:"'Heebo',sans-serif"}}>מסנן לפי גרף:</span><span onClick={()=>setChartFilter(null)} style={{background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.25)",color:"#6366f1",borderRadius:"100px",padding:"2px 10px",fontSize:"11px",fontWeight:700,fontFamily:"'Heebo',sans-serif",cursor:"pointer"}}>{chartFilter.label} ×</span></div>}
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse",direction:"rtl"}}>
+                  <thead><tr style={{borderBottom:"1px solid #f1f5f9",background:"#fafafa"}}>
+                    {[["name","שם"],["institution","מוסד"],["course","קורס"],["price","מסלול"],["deadline","דד-ליין"],["status","סטטוס"]].map(([col,label])=>(
+                      <th key={col} onClick={col!=="status"?()=>handleColSort(col):undefined} style={{padding:"9px 13px",textAlign:"right",fontSize:"10px",color:colSort.col===col?"#6366f1":"#94a3b8",fontWeight:700,letterSpacing:".05em",whiteSpace:"nowrap",cursor:col!=="status"?"pointer":"default",userSelect:"none"}}>
+                        {col!=="status"&&<SortInd col={col}/>}{label}
+                      </th>
+                    ))}
+                  </tr></thead>
+                  <tbody>
+                    {dbLoading&&orders.length===0&&<tr><td colSpan={6} style={{padding:"36px",textAlign:"center",fontFamily:"'Heebo',sans-serif"}}>
+                      <div className="spin-a" style={{width:"24px",height:"24px",border:"3px solid #e2e8f0",borderTop:"3px solid #6366f1",borderRadius:"50%",margin:"0 auto 10px"}}/>
+                      <div style={{color:"#94a3b8",fontSize:"13px"}}>טוען הגשות...</div>
+                    </td></tr>}
+                    {!dbLoading&&displayOrders.length===0&&<tr><td colSpan={6} style={{padding:"36px",textAlign:"center",color:"#94a3b8",fontFamily:"'Heebo',sans-serif",fontSize:"13px"}}>
+                      {orders.length===0?"עדיין אין הגשות — שתף את הקישור ותתחיל לקבל עבודות 🔥":"אין עבודות תואמות לסינון"}
+                    </td></tr>}
+                    {displayOrders.map(o=>{
+                      const rem=(o.submittedAt+o.plan.hours*3600000)-Date.now();
+                      const urgRow=rem<3*3600000; const st=SS[o.status];
+                      return (
+                        <tr key={o.id} className="trow" onClick={()=>setSel(o)} style={{borderBottom:"1px solid #f8fafc",cursor:"pointer"}}>
+                          <td style={{padding:"11px 13px"}}><div style={{fontWeight:700,fontSize:"13px",color:"#0f172a"}}>{o.name}</div><div style={{fontSize:"10px",color:"#94a3b8"}}>{o.email}</div></td>
+                          <td style={{padding:"11px 13px",fontSize:"11px",color:"#64748b",whiteSpace:"nowrap"}}>{o.institution.replace("אוניברסיטת ","")}</td>
+                          <td style={{padding:"11px 13px",fontSize:"11px",color:"#475569"}}>{o.course}</td>
+                          <td style={{padding:"11px 13px"}}><span style={{background:o.plan.accent+"18",border:`1px solid ${o.plan.accent}40`,color:o.plan.accent,borderRadius:"100px",padding:"2px 8px",fontSize:"11px",fontWeight:700,whiteSpace:"nowrap"}}>{o.plan.name} · ₪{o.plan.price}</span></td>
+                          <td style={{padding:"11px 13px"}}><span className={urgRow?"puls":""} style={{fontFamily:"monospace",fontSize:"13px",fontWeight:700,color:urgRow?"#dc2626":"#334155"}}>{fmtMs(rem)}</span></td>
+                          <td style={{padding:"11px 13px"}} onClick={e=>e.stopPropagation()}>
+                            <select value={o.status} onChange={e=>updateStatus(o.id,e.target.value)} style={{background:st.bg,border:`1px solid ${st.border}`,color:st.color,borderRadius:"6px",padding:"4px 7px",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700,cursor:"pointer",outline:"none"}}>
+                              {Object.keys(SS).map(s=><option key={s} value={s} style={{background:"#fff",color:"#1e293b"}}>{s}</option>)}
+                            </select>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>}
+
+          {adminTab==="archive"&&(
+            <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:"12px",overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
+              <div style={{padding:"13px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:"8px"}}>
+                <span style={{fontSize:"15px"}}>📁</span><h3 style={{fontWeight:900,fontSize:"14px",color:"#0f172a"}}>ארכיון — עבודות שנשלח עליהן משוב</h3>
+                <span style={{background:"rgba(22,163,74,.08)",border:"1px solid rgba(22,163,74,.22)",color:"#16a34a",borderRadius:"100px",padding:"1px 9px",fontSize:"11px",fontWeight:700}}>{archivedOrders.length}</span>
+              </div>
+              {archivedOrders.length===0?<div style={{padding:"40px",textAlign:"center",color:"#94a3b8",fontFamily:"'Heebo',sans-serif",fontSize:"13px"}}><div style={{fontSize:"30px",marginBottom:"8px"}}>📭</div>הארכיון ריק</div>:(
+                <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",direction:"rtl"}}>
+                  <thead><tr style={{borderBottom:"1px solid #f1f5f9",background:"#fafafa"}}>{["שם","מוסד","קורס","מסלול","הוגש לפני"].map(h=><th key={h} style={{padding:"9px 13px",textAlign:"right",fontSize:"10px",color:"#94a3b8",fontWeight:700,letterSpacing:".05em"}}>{h}</th>)}</tr></thead>
+                  <tbody>{archivedOrders.map(o=>{
+                    const h=Math.round((Date.now()-o.submittedAt)/3600000);
+                    return <tr key={o.id} className="trow" onClick={()=>setSel(o)} style={{borderBottom:"1px solid #f8fafc",cursor:"pointer"}}>
+                      <td style={{padding:"11px 13px"}}><div style={{fontWeight:700,fontSize:"13px",color:"#0f172a"}}>{o.name}</div><div style={{fontSize:"10px",color:"#94a3b8"}}>{o.email}</div></td>
+                      <td style={{padding:"11px 13px",fontSize:"11px",color:"#64748b"}}>{o.institution.replace("אוניברסיטת ","")}</td>
+                      <td style={{padding:"11px 13px",fontSize:"11px",color:"#475569"}}>{o.course}</td>
+                      <td style={{padding:"11px 13px"}}><span style={{background:o.plan.accent+"18",border:`1px solid ${o.plan.accent}40`,color:o.plan.accent,borderRadius:"100px",padding:"2px 8px",fontSize:"11px",fontWeight:700}}>{o.plan.name} · ₪{o.plan.price}</span></td>
+                      <td style={{padding:"11px 13px",fontSize:"11px",color:"#94a3b8",fontFamily:"monospace"}}>{h>=48?`${Math.floor(h/24)} ימים`:`${h} שעות`}</td>
+                    </tr>;
+                  })}</tbody>
+                </table></div>
+              )}
+            </div>
+          )}
+        </main>
+      </div>
+    </>
+  );
+
+  /* ── LANDING ── */
+  const curPlan=PLANS.find(p=>p.id===selPlan);
+
+  if(submitted) return (
+    <>
+      <style>{css}</style>
+      <div dir="rtl" style={{background:"#fef7ef",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Heebo',sans-serif",textAlign:"center",padding:"2rem"}}>
+        <div><div style={{fontSize:"5rem",marginBottom:"1rem"}}>🔥</div>
+          <h2 style={{fontSize:"clamp(2rem,6vw,3rem)",fontWeight:900,color:"#dc2626",margin:"0 0 12px"}}>הקובץ התקבל.</h2>
+          <p style={{fontSize:"1.2rem",color:"#78716c",margin:"0 0 20px"}}>תכין את הדמעות — המשוב בדרך.</p>
+          {curPlan&&<div style={{display:"inline-block",background:curPlan.glowBg,border:`1px solid ${curPlan.glowBorder}`,borderRadius:"100px",padding:"7px 20px",fontSize:"13px",color:curPlan.accent,fontWeight:700}}>מסלול {curPlan.name} · {fmtPlanTime(curPlan.hours)}</div>}
+        </div>
+      </div>
+    </>
+  );
+
+  return (
+    <>
+      <style>{css}</style>
+      {loginOpen&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.45)",zIndex:500,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(6px)"}} onClick={()=>{setLoginOpen(false);setLerr("");}}>
+          <div className="fin" onClick={e=>e.stopPropagation()} style={{background:"#fff",border:"1px solid #ddd6cc",borderRadius:"18px",padding:"28px",width:"min(350px,90vw)",fontFamily:"'Heebo',sans-serif",direction:"rtl",boxShadow:"0 20px 60px rgba(0,0,0,.12)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
+              <h3 style={{fontWeight:900,fontSize:"16px",margin:0,color:"#1a1510"}}>🔐 כניסת צוות</h3>
+              <button onClick={()=>{setLoginOpen(false);setLerr("");}} style={{background:"#f5f1eb",border:"1px solid #ddd6cc",borderRadius:"7px",padding:"6px",cursor:"pointer",color:"#78716c",display:"flex"}}><X size={13}/></button>
+            </div>
+            <div style={{marginBottom:"12px"}}><label className="lbl">שם משתמש</label><input className="fi" type="text" placeholder="admin" value={uname} onChange={e=>setUname(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doLogin()}/></div>
+            <div style={{marginBottom:"16px"}}><label className="lbl">סיסמה</label><input className="fi" type="password" placeholder="••••" value={pwd} onChange={e=>setPwd(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doLogin()}/></div>
+            {lerr&&<div style={{color:"#dc2626",fontSize:"12px",marginBottom:"12px",textAlign:"center"}}>{lerr}</div>}
+            <button onClick={doLogin} style={{width:"100%",padding:"13px",borderRadius:"10px",border:"none",background:"linear-gradient(135deg,#dc2626,#f97316)",color:"#fff",fontFamily:"'Heebo',sans-serif",fontWeight:900,fontSize:"15px",cursor:"pointer"}}>כניסה 🔥</button>
+          </div>
+        </div>
+      )}
+
+      <div dir="rtl" style={{background:"#fef7ef",minHeight:"100vh",color:"#1a1510",fontFamily:"'Heebo',sans-serif",overflowX:"hidden",position:"relative"}}>
+        <div style={{position:"absolute",top:"-80px",right:"-80px",width:"400px",height:"400px",background:"radial-gradient(circle,rgba(251,146,60,.18) 0%,transparent 65%)",pointerEvents:"none",zIndex:0}}/>
+        <div style={{position:"absolute",top:"200px",left:"-100px",width:"350px",height:"350px",background:"radial-gradient(circle,rgba(220,38,38,.1) 0%,transparent 65%)",pointerEvents:"none",zIndex:0}}/>
+
+        <section style={{position:"relative",zIndex:1,maxWidth:"800px",margin:"0 auto",padding:"72px 24px 56px",textAlign:"center"}}>
+          <h1 style={{fontSize:"clamp(2.6rem,6.5vw,4.4rem)",fontWeight:900,lineHeight:1.08,letterSpacing:"-.03em",margin:"0 0 28px"}}>
+            העבודה שלך <span style={{color:"#dc2626"}}>דלוחה.</span><br/>
+            <span style={{color:"#f97316"}}>חבל</span> שתגלה את זה בציון.
+          </h1>
+          <div style={{background:"rgba(255,255,255,.75)",border:"1px solid rgba(220,38,38,.12)",borderRadius:"16px",padding:"18px 24px",maxWidth:"580px",margin:"0 auto 36px",backdropFilter:"blur(4px)",boxShadow:"0 4px 16px rgba(220,38,38,.06)"}}>
+            <p style={{fontSize:"1.05rem",color:"#57534e",lineHeight:1.8,margin:0}}>
+              חברים לא יגידו לך את האמת — הם יחייכו ויגידו ״וואו, ממש טוב״.<br/>ה-AI? יחרטט בביטחון עד שתגיש ותיפול.<br/>
+              <strong style={{color:"#1a1510"}}>עורך דין</strong> יקרא, יבקר, ויאמר גם את מה שלא נעים לשמוע&nbsp;😉
+            </p>
+          </div>
+          <div style={{display:"flex",gap:"10px",justifyContent:"center",flexWrap:"wrap"}}>
+            {[["✓ עד 4 עמודים","#57534e","rgba(0,0,0,.06)","rgba(0,0,0,.1)"],["✓ הערות מפורטות","#57534e","rgba(0,0,0,.06)","rgba(0,0,0,.1)"],["✓ כתישה שמעלה ציונים","#b91c1c","rgba(220,38,38,.08)","rgba(220,38,38,.22)"]].map(([t,tc,bg,bc])=>(
+              <span key={t} style={{background:bg,border:`1px solid ${bc}`,borderRadius:"100px",padding:"7px 16px",fontSize:"13px",fontWeight:700,color:tc}}>{t}</span>
+            ))}
+          </div>
+        </section>
+
+        <div style={{textAlign:"center",padding:"4px 24px 32px",zIndex:1,position:"relative",display:"flex",alignItems:"center",justifyContent:"center",gap:"14px"}}>
+          <div style={{height:"1px",width:"100px",background:"linear-gradient(to right,transparent,rgba(220,38,38,.3))"}}/>
+          <span style={{fontSize:"18px",opacity:0.55}}>🔥</span>
+          <div style={{height:"1px",width:"100px",background:"linear-gradient(to left,transparent,rgba(220,38,38,.3))"}}/>
+        </div>
+
+        <section style={{maxWidth:"1040px",margin:"0 auto",padding:"0 24px 72px",position:"relative",zIndex:1}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:"20px"}}>
+            {PLANS.map(plan=>{
+              const isSel=selPlan===plan.id, isHov=hovP===plan.id;
+              return (
+                <div key={plan.id}
+                  onClick={()=>{setSelPlan(plan.id);setTimeout(()=>formRef.current?.scrollIntoView({behavior:"smooth",block:"start"}),80);}}
+                  onMouseEnter={()=>setHovP(plan.id)} onMouseLeave={()=>setHovP(null)}
+                  style={{background:isSel?plan.glowBg:"#fff",border:`2px solid ${isSel?plan.accent:plan.recommended?"rgba(239,68,68,.4)":"#ede6dc"}`,borderRadius:"18px",padding:"26px 22px",cursor:"pointer",position:"relative",boxShadow:isSel?`0 8px 32px ${plan.accent}28,0 2px 8px rgba(0,0,0,.06)`:isHov?"0 10px 32px rgba(0,0,0,.12)":"0 2px 8px rgba(0,0,0,.04)",transform:isHov&&!isSel?"translateY(-5px) rotate(-.3deg)":isSel?"translateY(-2px)":"none",transition:"all .22s ease",display:"flex",flexDirection:"column"}}>
+                  {plan.recommended&&<div style={{position:"absolute",top:"-13px",right:"20px",background:"linear-gradient(135deg,#dc2626,#f97316)",color:"#fff",fontSize:"11px",fontWeight:800,padding:"4px 14px",borderRadius:"100px",boxShadow:"0 3px 10px rgba(220,38,38,.35)"}}>🔥 הכי פופולרי</div>}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"16px",gap:"10px"}}>
+                    <div><h3 style={{fontSize:"1.25rem",fontWeight:900,color:plan.accent,margin:"0 0 4px"}}>{plan.name}</h3><p style={{fontSize:"11px",color:"#a8a29e",lineHeight:1.4,margin:0,maxWidth:"160px"}}>{plan.tagline}</p></div>
+                    <div style={{textAlign:"left",flexShrink:0}}><div style={{fontSize:"2.1rem",fontWeight:900,lineHeight:1,color:"#1a1510"}}>₪{plan.price}</div><div style={{fontSize:"11px",color:"#a8a29e",marginTop:"3px"}}>{fmtPlanTime(plan.hours)}</div></div>
+                  </div>
+                  <ul style={{listStyle:"none",padding:0,margin:"0 0 20px",flex:1}}>
+                    {plan.features.map((f,i)=>(
+                      <li key={i} style={{fontSize:"13px",color:"#57534e",padding:"5px 0",display:"flex",alignItems:"center",gap:"7px",borderBottom:"1px solid #f5f0e8"}}>
+                        <span style={{color:plan.accent,fontWeight:700,flexShrink:0}}>✓</span>{f}
+                      </li>
+                    ))}
+                  </ul>
+                  <button style={{width:"100%",padding:"12px",borderRadius:"9px",border:isSel?"none":"1px solid #e0d8cc",background:isSel?plan.accent:"rgba(0,0,0,.03)",color:isSel?"#fff":"#a8a29e",fontFamily:"'Heebo',sans-serif",fontWeight:700,fontSize:"13px",cursor:"pointer",transition:"all .18s"}}>
+                    {isSel?"✓ נבחר — גלול לטופס ↓":"לבחירת מסלול זה ↓"}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <div style={{maxWidth:"680px",margin:"0 auto",padding:"0 24px 18px",position:"relative",zIndex:1}}>
+          <div style={{background:"linear-gradient(135deg,#fdba74,#fca5a5)",border:"2px solid #f97316",borderRadius:"14px",padding:"14px 22px",textAlign:"center",fontWeight:800,fontSize:"14px",color:"#7c2d12",boxShadow:"0 4px 16px rgba(249,115,22,.18)",letterSpacing:"-.01em",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",flexWrap:"wrap"}}>
+            <span style={{fontSize:"18px"}}>⚠️</span><span>לא אחראים לדמעות, רגשות פגועים, ולחץ דם גבוה בעקבות המשוב</span><span style={{fontSize:"18px"}}>⚠️</span>
+          </div>
+        </div>
+
+        <section ref={formRef} style={{maxWidth:"680px",margin:"0 auto",padding:"0 24px 90px",position:"relative",zIndex:1}}>
+          <div style={{background:"#fff",border:"2px solid #ede6dc",borderRadius:"20px",padding:"clamp(22px,5vw,38px)",boxShadow:"0 8px 32px rgba(220,38,38,.07),0 2px 8px rgba(0,0,0,.04)"}}>
+            <div style={{textAlign:"center",marginBottom:"24px"}}>
+              <h2 style={{fontSize:"1.75rem",fontWeight:900,margin:"0 0 12px",color:"#1a1510"}}>שלח את העבודה לכתישה 🔥</h2>
+              {curPlan?<div style={{display:"inline-block",background:curPlan.glowBg,border:`1px solid ${curPlan.glowBorder}`,borderRadius:"100px",padding:"5px 17px",fontSize:"12px",color:curPlan.accent,fontWeight:700}}>מסלול {curPlan.name} — ₪{curPlan.price} — {fmtPlanTime(curPlan.hours)}</div>:<p style={{color:"#a8a29e",fontSize:"13px",margin:0}}>↑ בחר מסלול למעלה</p>}
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
+              <div className="gc2">
+                <div><label className="lbl">שם מלא</label><input className="fi" type="text" placeholder="ישראל ישראלי" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></div>
+                <div><label className="lbl">כתובת מייל</label><input className="fi" type="email" placeholder="israel@uni.ac.il" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></div>
+              </div>
+              <div className="gc2">
+                <div><label className="lbl">מגדר</label>
+                  <select className="fi" value={form.gender} onChange={e=>setForm({...form,gender:e.target.value})}>
+                    <option value="">-- בחר --</option>{GENDERS.map(g=><option key={g} value={g}>{g}</option>)}
+                  </select>
+                </div>
+                <div><label className="lbl">מוסד לימודים</label>
+                  <select className="fi" value={form.institution} onChange={e=>setForm({...form,institution:e.target.value})}>
+                    <option value="">-- בחר מוסד --</option>{INSTS.map(i=><option key={i} value={i}>{i}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="gc2">
+                <div><label className="lbl">שנת לימוד</label>
+                  <select className="fi" value={form.year} onChange={e=>setForm({...form,year:e.target.value})}>
+                    <option value="">-- בחר שנה --</option>{YEARS.map(y=><option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+                <div><label className="lbl">קורס</label>
+                  <select className="fi" value={form.course} onChange={e=>setForm({...form,course:e.target.value})}>
+                    <option value="">-- בחר קורס --</option>{COURSES.map(c=><option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div><label className="lbl">הערות נוספות (אופציונלי)</label><textarea className="fi" rows={3} placeholder="ספר לנו ממה אתה הכי מודאג..." value={form.notes} onChange={e=>setForm({...form,notes:e.target.value})}/></div>
+              <div className="gc2">
+                {[{lbl:"הנחיות העבודה",ref:instrRef,file:instrFile,set:setInstrFile,ico:"📋"},{lbl:"הקובץ שלך (עד 4 עמ')",ref:paperRef,file:paperFile,set:setPaperFile,ico:"🔥"}].map((u,i)=>(
+                  <div key={i}>
+                    <label className="lbl">{u.lbl}</label>
+                    <div
+                      onClick={()=>u.ref.current?.click()}
+                      onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor="#dc2626";e.currentTarget.style.background="rgba(220,38,38,.05)";}}
+                      onDragLeave={e=>{e.currentTarget.style.borderColor=u.file?"#16a34a":"#ccc5b9";e.currentTarget.style.background="#faf7f3";}}
+                      onDrop={e=>{e.preventDefault();e.currentTarget.style.borderColor=u.file?"#16a34a":"#ccc5b9";e.currentTarget.style.background="#faf7f3";const f=e.dataTransfer.files[0];if(f)u.set(f);}}
+                      style={{border:`2px dashed ${u.file?"#16a34a":"#ccc5b9"}`,borderRadius:"10px",padding:"13px 8px",textAlign:"center",cursor:"pointer",background:"#faf7f3",color:u.file?"#16a34a":"#a8a29e",transition:"all .2s",minHeight:"72px",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:"4px"}}>
+                      <div style={{fontSize:"18px"}}>{u.file?"✅":u.ico}</div>
+                      <div style={{fontSize:"10px",fontWeight:600,wordBreak:"break-all"}}>{u.file?u.file.name:"לחץ להעלאה · גרור לכאן"}</div>
+                    </div>
+                    <input ref={u.ref} type="file" style={{display:"none"}} onChange={e=>u.set(e.target.files[0])}/>
+                  </div>
+                ))}
+              </div>
+              <button onClick={handleSubmit} disabled={submitting} onMouseEnter={()=>!submitting&&setBtnHov(true)} onMouseLeave={()=>setBtnHov(false)}
+                style={{width:"100%",padding:"17px",borderRadius:"13px",border:"none",background:"linear-gradient(135deg,#dc2626,#f97316)",color:"#fff",fontFamily:"'Heebo',sans-serif",fontWeight:900,fontSize:"18px",cursor:submitting?"not-allowed":"pointer",opacity:submitting?0.8:btnHov?0.9:1,transform:!submitting&&btnHov?"scale(1.015)":"scale(1)",transition:"all .18s",boxShadow:btnHov&&!submitting?"0 12px 36px rgba(220,38,38,.38)":"0 4px 18px rgba(220,38,38,.22)",marginTop:"4px",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px"}}>
+                {submitting
+                  ? <><div className="spin-a" style={{width:"20px",height:"20px",border:"3px solid rgba(255,255,255,.35)",borderTop:"3px solid #fff",borderRadius:"50%",flexShrink:0}}/>שולח...</>
+                  : "הגש ל-ROAST 🔥"
+                }
+              </button>
+              <p style={{textAlign:"center",fontSize:"11px",color:"#a8a29e",margin:0}}>לאחר השליחה תקבל אישור במייל · תשלום לאחר קבלת ההצעה</p>
+            </div>
+          </div>
+        </section>
+
+        <footer style={{textAlign:"center",padding:"18px 24px",borderTop:"1px solid #ede6dc",background:"#faf2e8",color:"#a8a29e",fontSize:"12px",position:"relative",zIndex:1}}>
+          <p style={{margin:"0 0 10px",color:"#78716c"}}>🔥 LawRoast · ביקורת משפטית שלא תשכח</p>
+          <button onClick={()=>setLoginOpen(true)} style={{background:"none",border:"none",cursor:"pointer",color:"#d4cdc4",fontSize:"11px",fontFamily:"'Heebo',sans-serif",padding:0,transition:"color .2s"}} onMouseEnter={e=>e.target.style.color="#a8a29e"} onMouseLeave={e=>e.target.style.color="#d4cdc4"}>
+            כניסת צוות
+          </button>
+        </footer>
+      </div>
+    </>
+  );
+}
