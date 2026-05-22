@@ -254,6 +254,8 @@ export default function App() {
         const pp=paperFile?await db.uploadFile(paperFile,`${orderId}/paper.${ext(paperFile)}`):null;
         if(ip||pp) await db.patchOrder(orderId,{instructions_path:ip,paper_path:pp});
       } catch(e){ fileError=String(e); }
+           } catch(e){ fileError=String(e); }
+      fetch('/api/send-confirmation',...).catch(()=>{});
       setSubmitted(true);
       if(fileError) setTimeout(()=>alert("⚠️ ההגשה נשמרה אבל הקבצים לא הועלו:\n"+fileError),300);
     } catch(e){ setFormError("❌ שגיאה בשליחה: "+(typeof e==="string"?e:(e?.message||JSON.stringify(e)))); }
