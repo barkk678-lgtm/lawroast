@@ -96,6 +96,14 @@ function Drawer({ order, onClose, onStatusChange }) {
   const [roast,setRoast]=useState(""), [phase,setPhase]=useState(0), [ffile,setFfile]=useState(null);
   const [,setTick]=useState(0); const fref=useRef();
   useEffect(()=>{ const id=setInterval(()=>setTick(t=>t+1),1000); return ()=>clearInterval(id); },[]);
+  useEffect(()=>{
+    try{
+      if(window.location.hash==='#admin'){
+        if(sessionStorage.getItem('lr_auth')==='1') setView('admin');
+        else setLoginOpen(true);
+      }
+    }catch{}
+  },[]);
   const remaining=(order.submittedAt+order.plan.hours*3600000)-Date.now();
   const isUrg=remaining<3*3600000&&order.status!=="נשלח משוב";
   const st=SS[order.status];
@@ -200,8 +208,11 @@ export default function App() {
   },[view,loadOrders]);
 
   const doLogin=()=>{
-    if(uname==="admin"&&pwd==="1234"){setLoginOpen(false);setView("admin");setLerr("");setUname("");setPwd("");}
-    else setLerr("פרטים שגויים.");
+    if(uname==="admin"&&pwd==="1234"){
+      try{sessionStorage.setItem('lr_auth','1');}catch{}
+      window.location.hash='admin';
+      setLoginOpen(false);setView("admin");setLerr("");setUname("");setPwd("");
+    }else setLerr("פרטים שגויים.");
   };
 
   const updateStatus=(id,status)=>{
@@ -563,10 +574,9 @@ export default function App() {
           </div>
         </section>
 
-        <div style={{textAlign:"center",padding:"4px 24px 32px",zIndex:1,position:"relative",display:"flex",alignItems:"center",justifyContent:"center",gap:"14px"}}>
-          <div style={{height:"1px",width:"100px",background:"linear-gradient(to right,transparent,rgba(220,38,38,.3))"}}/>
-          <span style={{fontSize:"18px",opacity:0.55}}>🔥</span>
-          <div style={{height:"1px",width:"100px",background:"linear-gradient(to left,transparent,rgba(220,38,38,.3))"}}/>
+        <div style={{textAlign:"center",padding:"4px 24px 36px",zIndex:1,position:"relative"}}>
+          <p style={{fontSize:"18px",fontWeight:900,color:"#1a1510",letterSpacing:"-.01em",marginBottom:"6px"}}>בחר את המסלול המתאים לך</p>
+          <p style={{fontSize:"12px",color:"#a8a29e",fontWeight:500}}>כמה מהר תצטרך את המשוב?</p>
         </div>
 
         <section style={{maxWidth:"1040px",margin:"0 auto",padding:"0 24px 72px",position:"relative",zIndex:1}}>
@@ -579,17 +589,12 @@ export default function App() {
                   onMouseEnter={()=>setHovP(plan.id)} onMouseLeave={()=>setHovP(null)}
                   style={{background:isSel?plan.glowBg:"#fff",border:`2px solid ${isSel?plan.accent:plan.recommended?"rgba(239,68,68,.4)":"#ede6dc"}`,borderRadius:"18px",padding:"26px 22px",cursor:"pointer",position:"relative",boxShadow:isSel?`0 8px 32px ${plan.accent}28,0 2px 8px rgba(0,0,0,.06)`:isHov?"0 10px 32px rgba(0,0,0,.12)":"0 2px 8px rgba(0,0,0,.04)",transform:isHov&&!isSel?"translateY(-5px) rotate(-.3deg)":isSel?"translateY(-2px)":"none",transition:"all .22s ease",display:"flex",flexDirection:"column"}}>
                   {plan.recommended&&<div style={{position:"absolute",top:"-13px",right:"20px",background:"linear-gradient(135deg,#dc2626,#f97316)",color:"#fff",fontSize:"11px",fontWeight:800,padding:"4px 14px",borderRadius:"100px",boxShadow:"0 3px 10px rgba(220,38,38,.35)"}}>🔥 הכי פופולרי</div>}
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"16px",gap:"10px"}}>
-                    <div><h3 style={{fontSize:"1.25rem",fontWeight:900,color:plan.accent,margin:"0 0 4px"}}>{plan.name}</h3><p style={{fontSize:"11px",color:"#a8a29e",lineHeight:1.4,margin:0,maxWidth:"160px"}}>{plan.tagline}</p></div>
-                    <div style={{textAlign:"left",flexShrink:0}}><div style={{fontSize:"2.1rem",fontWeight:900,lineHeight:1,color:"#1a1510"}}>₪{plan.price}</div><div style={{fontSize:"11px",color:"#a8a29e",marginTop:"3px"}}>{fmtPlanTime(plan.hours)}</div></div>
+                  <div style={{flex:1,marginBottom:"22px"}}>
+                    <h3 style={{fontSize:"1.35rem",fontWeight:900,color:plan.accent,marginBottom:"10px"}}>{plan.name}</h3>
+                    <p style={{fontSize:"13px",color:"#57534e",lineHeight:1.6,marginBottom:"18px"}}>{plan.tagline}</p>
+                    <div style={{fontSize:"2.6rem",fontWeight:900,lineHeight:1,color:"#1a1510"}}>₪{plan.price}</div>
+                    <div style={{fontSize:"12px",color:"#a8a29e",marginTop:"6px"}}>בתוך {fmtPlanTime(plan.hours)}</div>
                   </div>
-                  <ul style={{listStyle:"none",padding:0,margin:"0 0 20px",flex:1}}>
-                    {plan.features.map((f,i)=>(
-                      <li key={i} style={{fontSize:"13px",color:"#57534e",padding:"5px 0",display:"flex",alignItems:"center",gap:"7px",borderBottom:"1px solid #f5f0e8"}}>
-                        <span style={{color:plan.accent,fontWeight:700,flexShrink:0}}>✓</span>{f}
-                      </li>
-                    ))}
-                  </ul>
                   <button style={{width:"100%",padding:"12px",borderRadius:"9px",border:isSel?"none":"1px solid #e0d8cc",background:isSel?plan.accent:"rgba(0,0,0,.03)",color:isSel?"#fff":"#a8a29e",fontFamily:"'Heebo',sans-serif",fontWeight:700,fontSize:"13px",cursor:"pointer",transition:"all .18s"}}>
                     {isSel?"✓ נבחר — גלול לטופס ↓":"לבחירת מסלול זה ↓"}
                   </button>
