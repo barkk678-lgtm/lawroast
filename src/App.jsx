@@ -255,7 +255,7 @@ export default function App() {
         if(ip||pp) await db.patchOrder(orderId,{instructions_path:ip,paper_path:pp});
       } catch(e){ fileError=String(e); }
            } catch(e){ fileError=String(e); }
-      fetch('/api/send-confirmation',...).catch(()=>{});
+      fetch('/api/send-confirmation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:form.name,email:form.email,course:form.course,planId:selPlan,orderId})}).catch(()=>{});
       setSubmitted(true);
       if(fileError) setTimeout(()=>alert("⚠️ ההגשה נשמרה אבל הקבצים לא הועלו:\n"+fileError),300);
     } catch(e){ setFormError("❌ שגיאה בשליחה: "+(typeof e==="string"?e:(e?.message||JSON.stringify(e)))); }
