@@ -90,7 +90,7 @@ function Drawer({ order, onClose, onStatusChange }) {
   const st=SS[order.status];
   const send=async()=>{ setPhase(1); await new Promise(r=>setTimeout(r,1300)); setPhase(2); await new Promise(r=>setTimeout(r,1300)); setPhase(3); onStatusChange(order.id,"נשלח משוב"); };
 
-  const fileUrl = (path) => path ? `${SUPA}/storage/v1/object/public/papers/${encodeURIComponent(path)}` : null;
+  const fileUrl = (path) => path ? `${SUPA}/storage/v1/object/public/papers/${path}` : null;
   const instrName = order.instructions_path ? order.instructions_path.split("/").pop() : `הנחיות_${order.course}.pdf`;
   const paperName = order.paper_path ? order.paper_path.split("/").pop() : `עבודה_${order.name.split(" ")[0]}.docx`;
 
