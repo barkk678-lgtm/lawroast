@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from "recharts";
-import { LogOut, Clock, CheckCircle, Upload, X, Users, Flame, Mail, Search, RefreshCw } from "lucide-react";
+import { LogOut, Clock, CheckCircle, Upload, X, Users, Flame, Mail, Search, RefreshCw, Trash2, RotateCcw } from "lucide-react";
 
 /* ── Supabase ── */
 const SUPA = "https://iohmakgsmmrjssacmmvx.supabase.co";
@@ -11,6 +11,7 @@ const db = {
   getOrders:   ()       => fetch(`${SUPA}/rest/v1/orders?select=*&order=created_at.desc`,{headers:H}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
   insertOrder: d        => fetch(`${SUPA}/rest/v1/orders`,{method:"POST",headers:H,body:JSON.stringify(d)}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
   patchOrder:  (id,d)   => fetch(`${SUPA}/rest/v1/orders?id=eq.${id}`,{method:"PATCH",headers:H,body:JSON.stringify(d)}).then(r=>r.ok?Promise.resolve():r.text().then(t=>Promise.reject(t))),
+  deleteOrder: (id)     => fetch(`${SUPA}/rest/v1/orders?id=eq.${id}`,{method:"DELETE",headers:H}).then(r=>r.ok?null:r.text().then(t=>Promise.reject(t))),
   uploadFile:  async (f,path) => {
     const encoded = path.split("/").map(encodeURIComponent).join("/");
     const r = await fetch(`${SUPA}/storage/v1/object/papers/${encoded}`,{method:"POST",headers:{"apikey":KEY,"Authorization":`Bearer ${KEY}`,"Content-Type":f.type||"application/octet-stream"},body:f});
@@ -19,7 +20,7 @@ const db = {
   },
 };
 
-/* ── Plans ── */
+/* ── Constants ── */
 const PLANS = [
   { id:1, name:"סטנדרטי", price:120, hours:120, accent:"#818cf8", glowBg:"rgba(129,140,248,0.09)", glowBorder:"rgba(129,140,248,0.5)", tagline:"לא דחוף? גם אנחנו לא ממהרים", features:['בדיקה ע"י עו"ד מנוסה','הערות כתובות מפורטות','ניתוח חוזקות וחולשות','כתישה בטון נעים'] },
   { id:2, name:"מהיר", price:150, hours:72, accent:"#fb923c", glowBg:"rgba(251,146,60,0.09)", glowBorder:"rgba(251,146,60,0.5)", tagline:"כי הדד-ליין מתקרב ואתה יודע את זה", features:['בדיקה ע"י עו"ד מנוסה','הערות כתובות מפורטות','ניתוח חוזקות וחולשות','כתישה בטון נעים','עדיפות בתור'] },
@@ -44,6 +45,8 @@ const fmtMs = ms => {
   return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
 };
 
+const hoursAgo = ts => Math.round((Date.now()-new Date(ts).getTime())/3600000);
+
 const rowToOrder = r => ({
   id: r.id, name: r.name||"", email: r.email||"", gender: r.gender||"",
   institution: r.institution||"", year: r.year||"", course: r.course||"",
@@ -53,6 +56,7 @@ const rowToOrder = r => ({
   status: r.status||"התקבל",
   instructions_path: r.instructions_path||null,
   paper_path: r.paper_path||null,
+  deleted_at: r.deleted_at||null,
 });
 
 const css = `
@@ -83,6 +87,8 @@ textarea.fiw{resize:vertical}
 .fin{animation:fadeIn .3s ease}
 .sin{animation:slideIn .38s cubic-bezier(.16,1,.3,1)}
 .trow:hover td{background:#f8fafc!important}
+.del-btn{background:none;border:1px solid #e2e8f0;border-radius:6px;padding:5px;cursor:pointer;color:#94a3b8;display:flex;align-items:center;transition:all .15s}
+.del-btn:hover{border-color:#fca5a5!important;color:#dc2626!important;background:rgba(220,38,38,.05)!important}
 `;
 
 /* ── Drawer ── */
@@ -94,8 +100,7 @@ function Drawer({ order, onClose, onStatusChange }) {
   const isUrg=remaining<3*3600000&&order.status!=="נשלח משוב";
   const st=SS[order.status];
   const send=async()=>{ setPhase(1); await new Promise(r=>setTimeout(r,1300)); setPhase(2); await new Promise(r=>setTimeout(r,1300)); setPhase(3); onStatusChange(order.id,"נשלח משוב"); };
-
-  const fileUrl = (path) => path ? `${SUPA}/storage/v1/object/public/papers/${path}` : null;
+  const fileUrl = path => path ? `${SUPA}/storage/v1/object/public/papers/${path}` : null;
   const instrName = order.instructions_path ? order.instructions_path.split("/").pop() : `הנחיות_${order.course}.pdf`;
   const paperName = order.paper_path ? order.paper_path.split("/").pop() : `עבודה_${order.name.split(" ")[0]}.docx`;
 
@@ -167,18 +172,10 @@ export default function App() {
   const [uname,setUname]=useState(""), [pwd,setPwd]=useState(""), [lerr,setLerr]=useState("");
   const [orders,setOrders]=useState([]), [sel,setSel]=useState(null);
   const [,setTick]=useState(0);
-
-  // DB state
-  const [dbLoading,setDbLoading]=useState(false);
-  const [dbError,setDbError]=useState(null);
-  const [lastSync,setLastSync]=useState(null);
+  const [dbLoading,setDbLoading]=useState(false), [dbError,setDbError]=useState(null), [lastSync,setLastSync]=useState(null);
   const [submitting,setSubmitting]=useState(false);
-
-  // Table filters
   const [chartFilter,setChartFilter]=useState(null), [tableSearch,setTableSearch]=useState("");
   const [statusFilter,setStatusFilter]=useState(""), [colSort,setColSort]=useState({col:"deadline",dir:"asc"});
-
-  // Landing form
   const [selPlan,setSelPlan]=useState(null), [submitted,setSubmitted]=useState(false);
   const [form,setForm]=useState({name:"",email:"",gender:"",institution:"",year:"",course:"",notes:""});
   const [instrFile,setInstrFile]=useState(null), [paperFile,setPaperFile]=useState(null);
@@ -186,27 +183,21 @@ export default function App() {
   const [formError,setFormError]=useState(null);
   const instrRef=useRef(), paperRef=useRef(), formRef=useRef();
 
-  // Timers
   useEffect(()=>{ const id=setInterval(()=>setTick(t=>t+1),1000); return ()=>clearInterval(id); },[]);
 
-  // Load orders from Supabase
-  const loadOrders = useCallback(async () => {
+  const loadOrders = useCallback(async()=>{
     setDbLoading(true); setDbError(null);
-    try {
-      const rows = await db.getOrders();
-      setOrders(rows.map(rowToOrder));
-      setLastSync(Date.now());
-    } catch(e) {
-      setDbError("שגיאת התחברות לשרת — " + (typeof e==="string"?e:"בדוק חיבור ומפתח API"));
-    } finally { setDbLoading(false); }
-  }, []);
+    try { const rows=await db.getOrders(); setOrders(rows.map(rowToOrder)); setLastSync(Date.now()); }
+    catch(e){ setDbError("שגיאת התחברות לשרת — "+(typeof e==="string"?e:"בדוק חיבור")); }
+    finally { setDbLoading(false); }
+  },[]);
 
   useEffect(()=>{
-    if (view!=="admin") return;
+    if(view!=="admin") return;
     loadOrders();
-    const id=setInterval(loadOrders, 20000);
+    const id=setInterval(loadOrders,20000);
     return ()=>clearInterval(id);
-  }, [view, loadOrders]);
+  },[view,loadOrders]);
 
   const doLogin=()=>{
     if(uname==="admin"&&pwd==="1234"){setLoginOpen(false);setView("admin");setLerr("");setUname("");setPwd("");}
@@ -216,7 +207,24 @@ export default function App() {
   const updateStatus=(id,status)=>{
     setOrders(o=>o.map(x=>x.id===id?{...x,status}:x));
     setSel(s=>s?.id===id?{...s,status}:s);
-    db.patchOrder(id,{status}).catch(e=>console.error("patch failed",e));
+    db.patchOrder(id,{status}).catch(console.error);
+  };
+
+  const softDelete=(id)=>{
+    const now=new Date().toISOString();
+    setOrders(o=>o.map(x=>x.id===id?{...x,deleted_at:now}:x));
+    if(sel?.id===id) setSel(null);
+    db.patchOrder(id,{deleted_at:now}).catch(console.error);
+  };
+
+  const restore=(id)=>{
+    setOrders(o=>o.map(x=>x.id===id?{...x,deleted_at:null}:x));
+    db.patchOrder(id,{deleted_at:null}).catch(console.error);
+  };
+
+  const hardDelete=(id)=>{
+    setOrders(o=>o.filter(x=>x.id!==id));
+    db.deleteOrder(id).catch(console.error);
   };
 
   const handleSubmit=async()=>{
@@ -224,16 +232,11 @@ export default function App() {
     if(!selPlan){ setFormError("⚠️ אנא בחר מסלול לפני השליחה"); return; }
     if(!form.name.trim()){ setFormError("⚠️ אנא מלא שם מלא"); return; }
     if(!form.email.trim()){ setFormError("⚠️ אנא מלא כתובת מייל"); return; }
-    setFormError(null);
-    setSubmitting(true);
+    setFormError(null); setSubmitting(true);
     try {
-      const orderId = crypto.randomUUID();
-      await db.insertOrder({
-        id:orderId, name:form.name, email:form.email, gender:form.gender,
-        institution:form.institution, year:form.year, course:form.course,
-        plan_id:selPlan, notes:form.notes, status:"התקבל"
-      });
-      let fileError = null;
+      const orderId=crypto.randomUUID();
+      await db.insertOrder({id:orderId,name:form.name,email:form.email,gender:form.gender,institution:form.institution,year:form.year,course:form.course,plan_id:selPlan,notes:form.notes,status:"התקבל"});
+      let fileError=null;
       try {
         const ext=f=>f.name.split('.').pop().replace(/[^a-zA-Z0-9]/g,'').toLowerCase()||'bin';
         const ip=instrFile?await db.uploadFile(instrFile,`${orderId}/instructions.${ext(instrFile)}`):null;
@@ -242,14 +245,14 @@ export default function App() {
       } catch(e){ fileError=String(e); }
       setSubmitted(true);
       if(fileError) setTimeout(()=>alert("⚠️ ההגשה נשמרה אבל הקבצים לא הועלו:\n"+fileError),300);
-    } catch(e){
-      const msg=typeof e==="string"?e:(e?.message||JSON.stringify(e));
-      setFormError("❌ שגיאה בשליחה: "+msg);
-    } finally { setSubmitting(false); }
+    } catch(e){ setFormError("❌ שגיאה בשליחה: "+(typeof e==="string"?e:(e?.message||JSON.stringify(e)))); }
+    finally { setSubmitting(false); }
   };
 
-  const activeOrders=orders.filter(o=>o.status!=="נשלח משוב");
-  const archivedOrders=orders.filter(o=>o.status==="נשלח משוב");
+  const activeOrders  = orders.filter(o=>!o.deleted_at&&o.status!=="נשלח משוב");
+  const archivedOrders= orders.filter(o=>!o.deleted_at&&o.status==="נשלח משוב");
+  const trashOrders   = orders.filter(o=>o.deleted_at);
+
   const revenue=activeOrders.reduce((s,o)=>s+o.plan.price,0);
   const inProg=activeOrders.filter(o=>o.status==="בבדיקה").length;
   const urgCnt=activeOrders.filter(o=>o.plan.hours===36).length;
@@ -291,6 +294,47 @@ export default function App() {
   const hasFilters=chartFilter||tableSearch||statusFilter;
   const syncAgo=lastSync?Math.floor((Date.now()-lastSync)/1000):null;
 
+  const OrderTable = ({rows, showDelete=true}) => (
+    <div style={{overflowX:"auto"}}>
+      <table style={{width:"100%",borderCollapse:"collapse",direction:"rtl"}}>
+        <thead><tr style={{borderBottom:"1px solid #f1f5f9",background:"#fafafa"}}>
+          {[["name","שם"],["institution","מוסד"],["course","קורס"],["price","מסלול"],["deadline","דד-ליין"],["status","סטטוס"],["del",""]].map(([col,label])=>(
+            <th key={col} onClick={col!=="status"&&col!=="del"?()=>handleColSort(col):undefined}
+              style={{padding:"9px 13px",textAlign:"right",fontSize:"10px",color:colSort.col===col?"#6366f1":"#94a3b8",fontWeight:700,letterSpacing:".05em",whiteSpace:"nowrap",cursor:col!=="status"&&col!=="del"?"pointer":"default",userSelect:"none"}}>
+              {col!=="status"&&col!=="del"&&<SortInd col={col}/>}{label}
+            </th>
+          ))}
+        </tr></thead>
+        <tbody>
+          {rows.length===0&&<tr><td colSpan={7} style={{padding:"36px",textAlign:"center",color:"#94a3b8",fontFamily:"'Heebo',sans-serif",fontSize:"13px"}}>
+            {orders.filter(o=>!o.deleted_at).length===0?"עדיין אין הגשות — שתף את הקישור ותתחיל לקבל עבודות 🔥":"אין עבודות תואמות לסינון"}
+          </td></tr>}
+          {rows.map(o=>{
+            const rem=(o.submittedAt+o.plan.hours*3600000)-Date.now();
+            const urgRow=rem<3*3600000; const st=SS[o.status];
+            return (
+              <tr key={o.id} className="trow" onClick={()=>setSel(o)} style={{borderBottom:"1px solid #f8fafc",cursor:"pointer"}}>
+                <td style={{padding:"11px 13px"}}><div style={{fontWeight:700,fontSize:"13px",color:"#0f172a"}}>{o.name}</div><div style={{fontSize:"10px",color:"#94a3b8"}}>{o.email}</div></td>
+                <td style={{padding:"11px 13px",fontSize:"11px",color:"#64748b",whiteSpace:"nowrap"}}>{o.institution.replace("אוניברסיטת ","")}</td>
+                <td style={{padding:"11px 13px",fontSize:"11px",color:"#475569"}}>{o.course}</td>
+                <td style={{padding:"11px 13px"}}><span style={{background:o.plan.accent+"18",border:`1px solid ${o.plan.accent}40`,color:o.plan.accent,borderRadius:"100px",padding:"2px 8px",fontSize:"11px",fontWeight:700,whiteSpace:"nowrap"}}>{o.plan.name} · ₪{o.plan.price}</span></td>
+                <td style={{padding:"11px 13px"}}><span className={urgRow?"puls":""} style={{fontFamily:"monospace",fontSize:"13px",fontWeight:700,color:urgRow?"#dc2626":"#334155"}}>{fmtMs(rem)}</span></td>
+                <td style={{padding:"11px 13px"}} onClick={e=>e.stopPropagation()}>
+                  <select value={o.status} onChange={e=>updateStatus(o.id,e.target.value)} style={{background:st.bg,border:`1px solid ${st.border}`,color:st.color,borderRadius:"6px",padding:"4px 7px",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700,cursor:"pointer",outline:"none"}}>
+                    {Object.keys(SS).map(s=><option key={s} value={s} style={{background:"#fff",color:"#1e293b"}}>{s}</option>)}
+                  </select>
+                </td>
+                <td style={{padding:"11px 13px"}} onClick={e=>e.stopPropagation()}>
+                  {showDelete&&<button className="del-btn" title="העבר לסל מחזור" onClick={()=>softDelete(o.id)}><Trash2 size={13}/></button>}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+
   /* ── ADMIN ── */
   if(view==="admin") return (
     <>
@@ -301,9 +345,11 @@ export default function App() {
           <div style={{display:"flex",alignItems:"center",gap:"14px"}}>
             <div style={{display:"flex",alignItems:"center",gap:"7px"}}><span style={{fontSize:"18px"}}>🔥</span><span style={{fontWeight:900,fontSize:"16px",color:"#0f172a"}}>LawRoast</span></div>
             <div style={{display:"flex",gap:"2px",background:"#f1f5f9",borderRadius:"8px",padding:"3px"}}>
-              {[["live","📊 לייב"],["archive","📁 ארכיון"]].map(([t,l])=>(
+              {[["live","📊 לייב"],["archive","📁 ארכיון"],["trash","🗑️ סל מחזור"]].map(([t,l])=>(
                 <button key={t} onClick={()=>setAdminTab(t)} style={{padding:"5px 14px",borderRadius:"6px",border:"none",background:adminTab===t?"#fff":"transparent",color:adminTab===t?"#0f172a":"#64748b",fontFamily:"'Heebo',sans-serif",fontSize:"12px",fontWeight:700,cursor:"pointer",boxShadow:adminTab===t?"0 1px 4px rgba(0,0,0,.07)":"none",transition:"all .15s",display:"flex",alignItems:"center",gap:"4px"}}>
-                  {l}{t==="archive"&&archivedOrders.length>0&&<span style={{background:"#e2e8f0",borderRadius:"100px",padding:"1px 7px",fontSize:"10px",color:"#64748b"}}>{archivedOrders.length}</span>}
+                  {l}
+                  {t==="archive"&&archivedOrders.length>0&&<span style={{background:"#e2e8f0",borderRadius:"100px",padding:"1px 7px",fontSize:"10px",color:"#64748b"}}>{archivedOrders.length}</span>}
+                  {t==="trash"&&trashOrders.length>0&&<span style={{background:"rgba(220,38,38,.1)",borderRadius:"100px",padding:"1px 7px",fontSize:"10px",color:"#dc2626"}}>{trashOrders.length}</span>}
                 </button>
               ))}
             </div>
@@ -311,20 +357,19 @@ export default function App() {
           <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
             {syncAgo!==null&&!dbLoading&&<span style={{fontSize:"10px",color:"#94a3b8"}}>{syncAgo<10?"עודכן זה עתה":`עודכן לפני ${syncAgo}ש׳`}</span>}
             {dbLoading&&<div className="spin-a" style={{width:"14px",height:"14px",border:"2px solid #e2e8f0",borderTop:"2px solid #6366f1",borderRadius:"50%",flexShrink:0}}/>}
-            <button onClick={loadOrders} title="רענן" style={{display:"flex",alignItems:"center",gap:"5px",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#64748b",borderRadius:"7px",padding:"6px 10px",cursor:"pointer",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700}}><RefreshCw size={12}/></button>
+            <button onClick={loadOrders} style={{display:"flex",alignItems:"center",gap:"5px",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#64748b",borderRadius:"7px",padding:"6px 10px",cursor:"pointer",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700}}><RefreshCw size={12}/></button>
             <button onClick={()=>setView("landing")} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(220,38,38,.06)",border:"1px solid rgba(220,38,38,.2)",color:"#dc2626",borderRadius:"8px",padding:"7px 12px",cursor:"pointer",fontFamily:"'Heebo',sans-serif",fontSize:"12px",fontWeight:700}}><LogOut size={13}/> התנתק</button>
           </div>
         </header>
 
         <main style={{padding:"20px",maxWidth:"1280px",margin:"0 auto"}}>
           {dbError&&<div style={{background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.22)",borderRadius:"10px",padding:"12px 16px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"10px",fontFamily:"'Heebo',sans-serif"}}>
-            <span style={{fontSize:"16px"}}>⚠️</span>
-            <span style={{fontSize:"12px",color:"#dc2626",flex:1}}>{dbError}</span>
+            <span style={{fontSize:"16px"}}>⚠️</span><span style={{fontSize:"12px",color:"#dc2626",flex:1}}>{dbError}</span>
             <button onClick={loadOrders} style={{background:"rgba(220,38,38,.08)",border:"1px solid rgba(220,38,38,.2)",borderRadius:"6px",padding:"4px 10px",color:"#dc2626",fontSize:"11px",fontWeight:700,cursor:"pointer",fontFamily:"'Heebo',sans-serif"}}>נסה שוב</button>
           </div>}
 
+          {/* ── LIVE TAB ── */}
           {adminTab==="live"&&<>
-            {/* KPIs */}
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:"11px",marginBottom:"16px"}}>
               {[
                 {emoji:"💸",label:"כסף שעשית מלעשות לאנשים רע לב",val:`₪${revenue}`,color:"#16a34a",bg:"rgba(22,163,74,.07)",border:"rgba(22,163,74,.22)"},
@@ -339,7 +384,6 @@ export default function App() {
               ))}
             </div>
 
-            {/* Charts */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"11px",marginBottom:"16px"}}>
               {[
                 {title:"📊 התפלגות מסלולים",data:planData,dk:"הזמנות",type:"plan",colored:true,fmtLbl:v=>v,fmtTip:v=>[v,"הזמנות"]},
@@ -371,7 +415,6 @@ export default function App() {
               ))}
             </div>
 
-            {/* Table */}
             <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:"12px",overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
               <div style={{padding:"13px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"8px"}}>
                 <h3 style={{fontWeight:900,fontSize:"14px",color:"#0f172a"}}>🔥 Live Tasks</h3>
@@ -387,68 +430,76 @@ export default function App() {
                 </div>
               </div>
               {chartFilter&&<div style={{padding:"7px 16px",background:"#f8fafc",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:"6px"}}><span style={{fontSize:"11px",color:"#64748b",fontFamily:"'Heebo',sans-serif"}}>מסנן לפי גרף:</span><span onClick={()=>setChartFilter(null)} style={{background:"rgba(99,102,241,.1)",border:"1px solid rgba(99,102,241,.25)",color:"#6366f1",borderRadius:"100px",padding:"2px 10px",fontSize:"11px",fontWeight:700,fontFamily:"'Heebo',sans-serif",cursor:"pointer"}}>{chartFilter.label} ×</span></div>}
-              <div style={{overflowX:"auto"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",direction:"rtl"}}>
-                  <thead><tr style={{borderBottom:"1px solid #f1f5f9",background:"#fafafa"}}>
-                    {[["name","שם"],["institution","מוסד"],["course","קורס"],["price","מסלול"],["deadline","דד-ליין"],["status","סטטוס"]].map(([col,label])=>(
-                      <th key={col} onClick={col!=="status"?()=>handleColSort(col):undefined} style={{padding:"9px 13px",textAlign:"right",fontSize:"10px",color:colSort.col===col?"#6366f1":"#94a3b8",fontWeight:700,letterSpacing:".05em",whiteSpace:"nowrap",cursor:col!=="status"?"pointer":"default",userSelect:"none"}}>
-                        {col!=="status"&&<SortInd col={col}/>}{label}
-                      </th>
-                    ))}
-                  </tr></thead>
-                  <tbody>
-                    {dbLoading&&orders.length===0&&<tr><td colSpan={6} style={{padding:"36px",textAlign:"center",fontFamily:"'Heebo',sans-serif"}}>
-                      <div className="spin-a" style={{width:"24px",height:"24px",border:"3px solid #e2e8f0",borderTop:"3px solid #6366f1",borderRadius:"50%",margin:"0 auto 10px"}}/>
-                      <div style={{color:"#94a3b8",fontSize:"13px"}}>טוען הגשות...</div>
-                    </td></tr>}
-                    {!dbLoading&&displayOrders.length===0&&<tr><td colSpan={6} style={{padding:"36px",textAlign:"center",color:"#94a3b8",fontFamily:"'Heebo',sans-serif",fontSize:"13px"}}>
-                      {orders.length===0?"עדיין אין הגשות — שתף את הקישור ותתחיל לקבל עבודות 🔥":"אין עבודות תואמות לסינון"}
-                    </td></tr>}
-                    {displayOrders.map(o=>{
-                      const rem=(o.submittedAt+o.plan.hours*3600000)-Date.now();
-                      const urgRow=rem<3*3600000; const st=SS[o.status];
-                      return (
-                        <tr key={o.id} className="trow" onClick={()=>setSel(o)} style={{borderBottom:"1px solid #f8fafc",cursor:"pointer"}}>
-                          <td style={{padding:"11px 13px"}}><div style={{fontWeight:700,fontSize:"13px",color:"#0f172a"}}>{o.name}</div><div style={{fontSize:"10px",color:"#94a3b8"}}>{o.email}</div></td>
-                          <td style={{padding:"11px 13px",fontSize:"11px",color:"#64748b",whiteSpace:"nowrap"}}>{o.institution.replace("אוניברסיטת ","")}</td>
-                          <td style={{padding:"11px 13px",fontSize:"11px",color:"#475569"}}>{o.course}</td>
-                          <td style={{padding:"11px 13px"}}><span style={{background:o.plan.accent+"18",border:`1px solid ${o.plan.accent}40`,color:o.plan.accent,borderRadius:"100px",padding:"2px 8px",fontSize:"11px",fontWeight:700,whiteSpace:"nowrap"}}>{o.plan.name} · ₪{o.plan.price}</span></td>
-                          <td style={{padding:"11px 13px"}}><span className={urgRow?"puls":""} style={{fontFamily:"monospace",fontSize:"13px",fontWeight:700,color:urgRow?"#dc2626":"#334155"}}>{fmtMs(rem)}</span></td>
-                          <td style={{padding:"11px 13px"}} onClick={e=>e.stopPropagation()}>
-                            <select value={o.status} onChange={e=>updateStatus(o.id,e.target.value)} style={{background:st.bg,border:`1px solid ${st.border}`,color:st.color,borderRadius:"6px",padding:"4px 7px",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700,cursor:"pointer",outline:"none"}}>
-                              {Object.keys(SS).map(s=><option key={s} value={s} style={{background:"#fff",color:"#1e293b"}}>{s}</option>)}
-                            </select>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              {dbLoading&&orders.length===0
+                ?<div style={{padding:"36px",textAlign:"center",fontFamily:"'Heebo',sans-serif"}}><div className="spin-a" style={{width:"24px",height:"24px",border:"3px solid #e2e8f0",borderTop:"3px solid #6366f1",borderRadius:"50%",margin:"0 auto 10px"}}/><div style={{color:"#94a3b8",fontSize:"13px"}}>טוען הגשות...</div></div>
+                :<OrderTable rows={displayOrders}/>
+              }
             </div>
           </>}
 
+          {/* ── ARCHIVE TAB ── */}
           {adminTab==="archive"&&(
             <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:"12px",overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
               <div style={{padding:"13px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:"8px"}}>
                 <span style={{fontSize:"15px"}}>📁</span><h3 style={{fontWeight:900,fontSize:"14px",color:"#0f172a"}}>ארכיון — עבודות שנשלח עליהן משוב</h3>
                 <span style={{background:"rgba(22,163,74,.08)",border:"1px solid rgba(22,163,74,.22)",color:"#16a34a",borderRadius:"100px",padding:"1px 9px",fontSize:"11px",fontWeight:700}}>{archivedOrders.length}</span>
               </div>
-              {archivedOrders.length===0?<div style={{padding:"40px",textAlign:"center",color:"#94a3b8",fontFamily:"'Heebo',sans-serif",fontSize:"13px"}}><div style={{fontSize:"30px",marginBottom:"8px"}}>📭</div>הארכיון ריק</div>:(
-                <div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",direction:"rtl"}}>
-                  <thead><tr style={{borderBottom:"1px solid #f1f5f9",background:"#fafafa"}}>{["שם","מוסד","קורס","מסלול","הוגש לפני"].map(h=><th key={h} style={{padding:"9px 13px",textAlign:"right",fontSize:"10px",color:"#94a3b8",fontWeight:700,letterSpacing:".05em"}}>{h}</th>)}</tr></thead>
-                  <tbody>{archivedOrders.map(o=>{
-                    const h=Math.round((Date.now()-o.submittedAt)/3600000);
-                    return <tr key={o.id} className="trow" onClick={()=>setSel(o)} style={{borderBottom:"1px solid #f8fafc",cursor:"pointer"}}>
-                      <td style={{padding:"11px 13px"}}><div style={{fontWeight:700,fontSize:"13px",color:"#0f172a"}}>{o.name}</div><div style={{fontSize:"10px",color:"#94a3b8"}}>{o.email}</div></td>
-                      <td style={{padding:"11px 13px",fontSize:"11px",color:"#64748b"}}>{o.institution.replace("אוניברסיטת ","")}</td>
-                      <td style={{padding:"11px 13px",fontSize:"11px",color:"#475569"}}>{o.course}</td>
-                      <td style={{padding:"11px 13px"}}><span style={{background:o.plan.accent+"18",border:`1px solid ${o.plan.accent}40`,color:o.plan.accent,borderRadius:"100px",padding:"2px 8px",fontSize:"11px",fontWeight:700}}>{o.plan.name} · ₪{o.plan.price}</span></td>
-                      <td style={{padding:"11px 13px",fontSize:"11px",color:"#94a3b8",fontFamily:"monospace"}}>{h>=48?`${Math.floor(h/24)} ימים`:`${h} שעות`}</td>
-                    </tr>;
-                  })}</tbody>
-                </table></div>
-              )}
+              {archivedOrders.length===0
+                ?<div style={{padding:"40px",textAlign:"center",color:"#94a3b8",fontFamily:"'Heebo',sans-serif",fontSize:"13px"}}><div style={{fontSize:"30px",marginBottom:"8px"}}>📭</div>הארכיון ריק</div>
+                :<OrderTable rows={archivedOrders}/>
+              }
+            </div>
+          )}
+
+          {/* ── TRASH TAB ── */}
+          {adminTab==="trash"&&(
+            <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:"12px",overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
+              <div style={{padding:"13px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"8px",flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+                  <span style={{fontSize:"15px"}}>🗑️</span>
+                  <h3 style={{fontWeight:900,fontSize:"14px",color:"#0f172a"}}>סל מחזור</h3>
+                  {trashOrders.length>0&&<span style={{background:"rgba(220,38,38,.08)",border:"1px solid rgba(220,38,38,.2)",color:"#dc2626",borderRadius:"100px",padding:"1px 9px",fontSize:"11px",fontWeight:700}}>{trashOrders.length}</span>}
+                </div>
+                {trashOrders.length>0&&(
+                  <button onClick={()=>{if(window.confirm("למחוק לצמיתות את כל הפריטים בסל?"))trashOrders.forEach(o=>hardDelete(o.id));}}
+                    style={{background:"rgba(220,38,38,.06)",border:"1px solid rgba(220,38,38,.22)",borderRadius:"7px",padding:"6px 14px",color:"#dc2626",fontFamily:"'Heebo',sans-serif",fontSize:"12px",fontWeight:700,cursor:"pointer"}}>
+                    ריקון סל מחזור
+                  </button>
+                )}
+              </div>
+              {trashOrders.length===0
+                ?<div style={{padding:"40px",textAlign:"center",color:"#94a3b8",fontFamily:"'Heebo',sans-serif",fontSize:"13px"}}><div style={{fontSize:"30px",marginBottom:"8px"}}>🗑️</div>הסל ריק</div>
+                :<div style={{overflowX:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",direction:"rtl"}}>
+                    <thead><tr style={{borderBottom:"1px solid #f1f5f9",background:"#fafafa"}}>
+                      {["שם","קורס","מסלול","נמחק לפני",""].map(h=><th key={h} style={{padding:"9px 13px",textAlign:"right",fontSize:"10px",color:"#94a3b8",fontWeight:700,letterSpacing:".05em"}}>{h}</th>)}
+                    </tr></thead>
+                    <tbody>
+                      {trashOrders.map(o=>{
+                        const h=hoursAgo(o.deleted_at);
+                        return (
+                          <tr key={o.id} style={{borderBottom:"1px solid #f8fafc",opacity:0.75}}>
+                            <td style={{padding:"11px 13px"}}><div style={{fontWeight:700,fontSize:"13px",color:"#0f172a"}}>{o.name}</div><div style={{fontSize:"10px",color:"#94a3b8"}}>{o.email}</div></td>
+                            <td style={{padding:"11px 13px",fontSize:"11px",color:"#475569"}}>{o.course}</td>
+                            <td style={{padding:"11px 13px"}}><span style={{background:o.plan.accent+"18",border:`1px solid ${o.plan.accent}40`,color:o.plan.accent,borderRadius:"100px",padding:"2px 8px",fontSize:"11px",fontWeight:700}}>{o.plan.name} · ₪{o.plan.price}</span></td>
+                            <td style={{padding:"11px 13px",fontSize:"11px",color:"#94a3b8",fontFamily:"monospace"}}>{h>=48?`${Math.floor(h/24)} ימים`:`${h} שעות`}</td>
+                            <td style={{padding:"11px 13px"}} onClick={e=>e.stopPropagation()}>
+                              <div style={{display:"flex",gap:"6px",justifyContent:"flex-end"}}>
+                                <button onClick={()=>restore(o.id)} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(99,102,241,.08)",border:"1px solid rgba(99,102,241,.25)",borderRadius:"6px",padding:"5px 10px",color:"#6366f1",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700,cursor:"pointer"}}>
+                                  <RotateCcw size={12}/> שחזר
+                                </button>
+                                <button onClick={()=>{if(window.confirm("למחוק לצמיתות?"))hardDelete(o.id);}} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(220,38,38,.06)",border:"1px solid rgba(220,38,38,.2)",borderRadius:"6px",padding:"5px 10px",color:"#dc2626",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700,cursor:"pointer"}}>
+                                  <Trash2 size={12}/> מחק לצמיתות
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              }
             </div>
           )}
         </main>
@@ -549,7 +600,7 @@ export default function App() {
         </section>
 
         <div style={{maxWidth:"680px",margin:"0 auto",padding:"0 24px 18px",position:"relative",zIndex:1}}>
-          <div style={{background:"linear-gradient(135deg,#fdba74,#fca5a5)",border:"2px solid #f97316",borderRadius:"14px",padding:"14px 22px",textAlign:"center",fontWeight:800,fontSize:"14px",color:"#7c2d12",boxShadow:"0 4px 16px rgba(249,115,22,.18)",letterSpacing:"-.01em",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",flexWrap:"wrap"}}>
+          <div style={{background:"linear-gradient(135deg,#fdba74,#fca5a5)",border:"2px solid #f97316",borderRadius:"14px",padding:"14px 22px",textAlign:"center",fontWeight:800,fontSize:"14px",color:"#7c2d12",boxShadow:"0 4px 16px rgba(249,115,22,.18)",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",flexWrap:"wrap"}}>
             <span style={{fontSize:"18px"}}>⚠️</span><span>לא אחראים לדמעות, רגשות פגועים, ולחץ דם גבוה בעקבות המשוב</span><span style={{fontSize:"18px"}}>⚠️</span>
           </div>
         </div>
@@ -594,8 +645,7 @@ export default function App() {
                 {[{lbl:"הנחיות העבודה",ref:instrRef,file:instrFile,set:setInstrFile,ico:"📋"},{lbl:"הקובץ שלך (עד 4 עמ')",ref:paperRef,file:paperFile,set:setPaperFile,ico:"🔥"}].map((u,i)=>(
                   <div key={i}>
                     <label className="lbl">{u.lbl}</label>
-                    <div
-                      onClick={()=>u.ref.current?.click()}
+                    <div onClick={()=>u.ref.current?.click()}
                       onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor="#dc2626";e.currentTarget.style.background="rgba(220,38,38,.05)";}}
                       onDragLeave={e=>{e.currentTarget.style.borderColor=u.file?"#16a34a":"#ccc5b9";e.currentTarget.style.background="#faf7f3";}}
                       onDrop={e=>{e.preventDefault();e.currentTarget.style.borderColor=u.file?"#16a34a":"#ccc5b9";e.currentTarget.style.background="#faf7f3";const f=e.dataTransfer.files[0];if(f)u.set(f);}}
@@ -607,13 +657,10 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              {formError&&<div style={{background:"rgba(220,38,38,.07)",border:"1px solid rgba(220,38,38,.25)",borderRadius:"10px",padding:"12px 16px",fontSize:"13px",color:"#b91c1c",fontWeight:600,fontFamily:"'Heebo',sans-serif",direction:"rtl"}}>{formError}</div>}
+              {formError&&<div style={{background:"rgba(220,38,38,.07)",border:"1px solid rgba(220,38,38,.25)",borderRadius:"10px",padding:"12px 16px",fontSize:"13px",color:"#b91c1c",fontWeight:600,fontFamily:"'Heebo',sans-serif"}}>{formError}</div>}
               <button onClick={handleSubmit} disabled={submitting} onMouseEnter={()=>!submitting&&setBtnHov(true)} onMouseLeave={()=>setBtnHov(false)}
                 style={{width:"100%",padding:"17px",borderRadius:"13px",border:"none",background:"linear-gradient(135deg,#dc2626,#f97316)",color:"#fff",fontFamily:"'Heebo',sans-serif",fontWeight:900,fontSize:"18px",cursor:submitting?"not-allowed":"pointer",opacity:submitting?0.8:btnHov?0.9:1,transform:!submitting&&btnHov?"scale(1.015)":"scale(1)",transition:"all .18s",boxShadow:btnHov&&!submitting?"0 12px 36px rgba(220,38,38,.38)":"0 4px 18px rgba(220,38,38,.22)",marginTop:"4px",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px"}}>
-                {submitting
-                  ? <><div className="spin-a" style={{width:"20px",height:"20px",border:"3px solid rgba(255,255,255,.35)",borderTop:"3px solid #fff",borderRadius:"50%",flexShrink:0}}/>שולח...</>
-                  : "הגש ל-ROAST 🔥"
-                }
+                {submitting?<><div className="spin-a" style={{width:"20px",height:"20px",border:"3px solid rgba(255,255,255,.35)",borderTop:"3px solid #fff",borderRadius:"50%",flexShrink:0}}/>שולח...</>:"הגש ל-ROAST 🔥"}
               </button>
               <p style={{textAlign:"center",fontSize:"11px",color:"#a8a29e",margin:0}}>לאחר השליחה תקבל אישור במייל · תשלום לאחר קבלת ההצעה</p>
             </div>
