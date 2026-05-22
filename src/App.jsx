@@ -11,7 +11,7 @@ const db = {
   getOrders:   ()       => fetch(`${SUPA}/rest/v1/orders?select=*&order=created_at.desc`,{headers:H}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
   insertOrder: d        => fetch(`${SUPA}/rest/v1/orders`,{method:"POST",headers:H,body:JSON.stringify(d)}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
   patchOrder:  (id,d)   => fetch(`${SUPA}/rest/v1/orders?id=eq.${id}`,{method:"PATCH",headers:H,body:JSON.stringify(d)}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
-  uploadFile:  (f,path) => fetch(`${SUPA}/storage/v1/object/papers/${encodeURIComponent(path)}`,{method:"POST",headers:{"apikey":KEY,"Authorization":`Bearer ${KEY}`,"Content-Type":f.type||"application/octet-stream"},body:f}).then(r=>r.ok?path:null).catch(()=>null),
+  uploadFile:  (f,path) => fetch(`${SUPA}/storage/v1/object/papers/${path.split("/").map(encodeURIComponent).join("/")}`,{method:"POST",headers:{"apikey":KEY,"Authorization":`Bearer ${KEY}`,"Content-Type":f.type||"application/octet-stream"},body:f}).then(r=>r.ok?path:null).catch(()=>null),
 };
 
 /* ── Plans ── */
