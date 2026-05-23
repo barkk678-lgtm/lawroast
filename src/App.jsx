@@ -105,6 +105,85 @@ textarea.fiw{resize:vertical}
 .del-btn:hover{border-color:#fca5a5!important;color:#dc2626!important;background:rgba(220,38,38,.05)!important}
 `;
 
+const TESTIMONIALS = [
+  {initials:"נ.ל",bg:"#fde8d8",tc:"#c2410c",name:"נ. לוי",sub:"דיני חוזים · שנה א׳ · TAU",text:'חשבתי שהעבודה שלי ממש טובה. הוא חשב אחרת. היה לו הרבה מה להגיד ואימצתי כמעט את הכל. עליתי מהעבודה הקודמת מ-78 ל-91.'},
+  {initials:"י.מ",bg:"#dbeafe",tc:"#1d4ed8",name:"י. מזרחי",sub:"משפט חוקתי · שנה ב׳ · BIU",text:'קיבלתי את המשוב יום לפני ההגשה, ישבתי לתקן לילה שלם. לא נעים, אבל שווה. המרצה שלי שאל אם עברתי קורס כתיבה.'},
+  {initials:"ש.כ",bg:"#d1fae5",tc:"#065f46",name:"ש. כהן",sub:"משפט עונשין · שנה א׳ · Haifa",text:'הוא לא ריחם עלי וזה בדיוק מה שרציתי. כל הערה הייתה מדויקת. אני וחברה כתבנו את העבודות שלנו יחד, ואני קיבלתי 15 נקודות יותר.',hot:true},
+  {initials:"א.ר",bg:"#ede9fe",tc:"#5b21b6",name:"א. רוזנברג",sub:"דיני חוזים · שנה ב׳ · Reichman",text:'כואב לקרוא, אבל ממכר. ממש כמו שמסבירים באתר. הייתי אמור להיות עצבני, במקום זה ישבתי לתקן ישר. מסלול מהיר, קיבלתי תוך יומיים.'},
+  {initials:"ת.א",bg:"#fef9c3",tc:"#92400e",name:"ת. אברהם",sub:"משפט חוקתי · שנה א׳ · TAU",text:'משוב מעולה, מקצועי ומצחיק. סוף סוף קצת קלילות באקדמיה. כתב לי "נקודה מצוינת אם היא הייתה נכונה". צחקתי, תיקנתי, קיבלתי 94.'},
+];
+
+function TestimonialCard({ r }) {
+  return (
+    <div style={{background:"#fff",border:r.hot?"2px solid rgba(220,38,38,.2)":"1px solid #ede6dc",borderRadius:"14px",padding:"20px 22px",position:"relative",height:"100%"}}>
+      {r.hot&&<div style={{position:"absolute",top:"-11px",right:"18px",background:"linear-gradient(135deg,#dc2626,#f97316)",color:"#fff",fontSize:"10px",fontWeight:800,padding:"3px 12px",borderRadius:"100px"}}>🔥 הכי אהוב</div>}
+      <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px"}}>
+        <div style={{width:"40px",height:"40px",borderRadius:"50%",background:r.bg,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:"14px",color:r.tc}}>{r.initials}</div>
+        <div>
+          <p style={{fontWeight:700,fontSize:"14px",color:"#1a1510",margin:0}}>{r.name}</p>
+          <p style={{fontSize:"12px",color:"#a8a29e",margin:0}}>{r.sub}</p>
+        </div>
+        <div style={{marginRight:"auto",fontSize:"13px",color:"#f97316"}}>★★★★★</div>
+      </div>
+      <p style={{fontSize:"14px",color:"#57534e",lineHeight:1.75,margin:0}}>{r.text}</p>
+    </div>
+  );
+}
+
+function TestimonialsSection() {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    const id = setInterval(() => setCurrent(c => (c + 1) % TESTIMONIALS.length), 6000);
+    return () => clearInterval(id);
+  }, [isMobile]);
+
+  return (
+    <section style={{maxWidth:"1040px",margin:"0 auto",padding:"0 24px 60px",position:"relative",zIndex:1}}>
+      <div style={{textAlign:"center",marginBottom:"2rem"}}>
+        <h2 style={{fontSize:"24px",fontWeight:900,color:"#1a1510",margin:0}}>מה אומרים עלינו</h2>
+      </div>
+
+      {isMobile ? (
+        /* קרוסלה למובייל */
+        <div style={{position:"relative",overflow:"hidden"}}>
+          <div style={{transition:"opacity .4s ease",opacity:1}}>
+            <TestimonialCard r={TESTIMONIALS[current]} />
+          </div>
+          {/* נקודות ניווט */}
+          <div style={{display:"flex",justifyContent:"center",gap:"7px",marginTop:"16px"}}>
+            {TESTIMONIALS.map((_,i) => (
+              <button key={i} onClick={()=>setCurrent(i)} style={{width: i===current?"20px":"8px",height:"8px",borderRadius:"100px",border:"none",background:i===current?"#dc2626":"#ddd6cc",cursor:"pointer",padding:0,transition:"all .3s ease"}}/>
+            ))}
+          </div>
+        </div>
+      ) : (
+        /* פירמידה לדסקטופ */
+        <>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"16px",marginBottom:"16px"}}>
+            {TESTIMONIALS.slice(0,3).map((r,i)=><TestimonialCard key={i} r={r}/>)}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:"16px",maxWidth:"70%",margin:"0 auto"}}>
+            {TESTIMONIALS.slice(3).map((r,i)=><TestimonialCard key={i} r={r}/>)}
+          </div>
+        </>
+      )}
+
+      <div style={{textAlign:"center",marginTop:"1.5rem"}}>
+        <p style={{fontSize:"12px",color:"#a8a29e",margin:0}}>⭐ 4.9 ממוצע · 200+ עבודות נכתשו בהצלחה</p>
+      </div>
+    </section>
+  );
+}
+
 function Drawer({ order, onClose, onStatusChange }) {
   const [roast,setRoast]=useState(""), [phase,setPhase]=useState(0), [ffile,setFfile]=useState(null);
   const [,setTick]=useState(0); const fref=useRef();
@@ -611,57 +690,7 @@ export default function App() {
         </section>
 
         {/* ביקורות לקוחות */}
-        <section style={{maxWidth:"1040px",margin:"0 auto",padding:"0 24px 60px",position:"relative",zIndex:1}}>
-          <div style={{textAlign:"center",marginBottom:"2rem"}}>
-            <h2 style={{fontSize:"24px",fontWeight:900,color:"#1a1510",margin:0}}>מה אומרים עלינו</h2>
-          </div>
-
-          {/* שורה עליונה - 3 כרטיסים */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:"16px",marginBottom:"16px"}}>
-            {[
-              {initials:"נ.ל",bg:"#fde8d8",tc:"#c2410c",name:"נ. לוי",sub:"דיני חוזים · שנה א׳ · TAU",text:'חשבתי שהעבודה שלי ממש טובה. הוא חשב אחרת. היה לו הרבה מה להגיד ואימצתי כמעט את הכל. עליתי מהעבודה הקודמת מ-78 ל-91.'},
-              {initials:"י.מ",bg:"#dbeafe",tc:"#1d4ed8",name:"י. מזרחי",sub:"משפט חוקתי · שנה ב׳ · BIU",text:'קיבלתי את המשוב יום לפני ההגשה, ישבתי לתקן לילה שלם. לא נעים, אבל שווה. המרצה שלי שאל אם עברתי קורס כתיבה.'},
-              {initials:"ש.כ",bg:"#d1fae5",tc:"#065f46",name:"ש. כהן",sub:"משפט עונשין · שנה א׳ · Haifa",text:'הוא לא ריחם עלי וזה בדיוק מה שרציתי. כל הערה הייתה מדויקת. אני וחברה כתבנו את העבודות שלנו יחד, ואני קיבלתי 15 נקודות יותר.',hot:true},
-            ].map((r,i)=>(
-              <div key={i} style={{background:"#fff",border:r.hot?"2px solid rgba(220,38,38,.2)":"1px solid #ede6dc",borderRadius:"14px",padding:"20px 22px",position:"relative"}}>
-                {r.hot&&<div style={{position:"absolute",top:"-11px",right:"18px",background:"linear-gradient(135deg,#dc2626,#f97316)",color:"#fff",fontSize:"10px",fontWeight:800,padding:"3px 12px",borderRadius:"100px"}}>🔥 הכי אהוב</div>}
-                <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px"}}>
-                  <div style={{width:"40px",height:"40px",borderRadius:"50%",background:r.bg,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:"14px",color:r.tc}}>{r.initials}</div>
-                  <div>
-                    <p style={{fontWeight:700,fontSize:"14px",color:"#1a1510",margin:0}}>{r.name}</p>
-                    <p style={{fontSize:"12px",color:"#a8a29e",margin:0}}>{r.sub}</p>
-                  </div>
-                  <div style={{marginRight:"auto",fontSize:"13px",color:"#f97316"}}>★★★★★</div>
-                </div>
-                <p style={{fontSize:"14px",color:"#57534e",lineHeight:1.75,margin:0}}>{r.text}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* שורה תחתונה - 2 כרטיסים ממורכזים */}
-          <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:"16px",maxWidth:"70%",margin:"0 auto"}}>
-            {[
-              {initials:"א.ר",bg:"#ede9fe",tc:"#5b21b6",name:"א. רוזנברג",sub:"דיני חוזים · שנה ב׳ · Reichman",text:'כואב לקרוא, אבל ממכר. ממש כמו שמסבירים באתר. הייתי אמור להיות עצבני, במקום זה ישבתי לתקן ישר. מסלול מהיר, קיבלתי תוך יומיים.'},
-              {initials:"ת.א",bg:"#fef9c3",tc:"#92400e",name:"ת. אברהם",sub:"משפט חוקתי · שנה א׳ · TAU",text:'משוב מעולה, מקצועי ומצחיק. סוף סוף קצת קלילות באקדמיה. כתב לי "נקודה מצוינת אם היא הייתה נכונה". צחקתי, תיקנתי, קיבלתי 94.'},
-            ].map((r,i)=>(
-              <div key={i} style={{background:"#fff",border:"1px solid #ede6dc",borderRadius:"14px",padding:"20px 22px"}}>
-                <div style={{display:"flex",alignItems:"center",gap:"10px",marginBottom:"14px"}}>
-                  <div style={{width:"40px",height:"40px",borderRadius:"50%",background:r.bg,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,fontSize:"14px",color:r.tc}}>{r.initials}</div>
-                  <div>
-                    <p style={{fontWeight:700,fontSize:"14px",color:"#1a1510",margin:0}}>{r.name}</p>
-                    <p style={{fontSize:"12px",color:"#a8a29e",margin:0}}>{r.sub}</p>
-                  </div>
-                  <div style={{marginRight:"auto",fontSize:"13px",color:"#f97316"}}>★★★★★</div>
-                </div>
-                <p style={{fontSize:"14px",color:"#57534e",lineHeight:1.75,margin:0}}>{r.text}</p>
-              </div>
-            ))}
-          </div>
-
-          <div style={{textAlign:"center",marginTop:"1.5rem"}}>
-            <p style={{fontSize:"12px",color:"#a8a29e",margin:0}}>⭐ 4.9 ממוצע · 200+ עבודות נכתשו בהצלחה</p>
-          </div>
-        </section>
+        <TestimonialsSection />
 
         <div style={{maxWidth:"680px",margin:"0 auto",padding:"0 24px 18px",position:"relative",zIndex:1}}>
           <div style={{background:"linear-gradient(135deg,#fdba74,#fca5a5)",border:"2px solid #f97316",borderRadius:"14px",padding:"14px 22px",textAlign:"center",fontWeight:800,fontSize:"14px",color:"#7c2d12",boxShadow:"0 4px 16px rgba(249,115,22,.18)",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px",flexWrap:"wrap"}}>
