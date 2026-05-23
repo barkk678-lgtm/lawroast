@@ -3,7 +3,7 @@ import nodemailer from 'nodemailer';
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { name, email, course, feedback, fileUrl } = req.body;
+  const { name, email, course, feedback, fileAttachment } = req.body; // ← fileAttachment, לא fileUrl!
 
   const transporter = nodemailer.createTransport({
     service: 'gmail',
@@ -14,20 +14,20 @@ export default async function handler(req, res) {
   });
 
   try {
-    // ← זה החלק החדש - טוען את הקובץ ומצרף אותו למייל
-    let attachments = [];
-    if (fileUrl) {
-      const fileRes = await fetch(fileUrl);
-      const fileBuffer = Buffer.from(await fileRes.arrayBuffer());
-      const fileName = decodeURIComponent(fileUrl.split('/').pop().split('?')[0]) || 'עבודה_בדוקה.pdf';
-      attachments = [{ filename: fileName, content: fileBuffer }];
+    const attachments = [];
+    if (fileAttachment?.data) {
+      attachments.push({
+        filename: fileAttachment.name || 'עבודה_בדוקה.pdf',
+        content: Buffer.from(fileAttachment.data, 'base64'),
+        contentType: fileAttachment.type || 'application/octet-stream',
+      });
     }
 
     await transporter.sendMail({
       from: `"LawRoast 🔥" <${process.env.GMAIL_USER}>`,
       to: email,
       subject: `📝 המשוב על עבודתך מוכן — ${course}`,
-      attachments, // ← זה מצרף את הקובץ
+      attachments,
       html: `
         <div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
           <h2 style="color:#dc2626;">🔥 המשוב שלך מוכן</h2>
