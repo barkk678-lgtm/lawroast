@@ -45,7 +45,7 @@ export default async function handler(req, res) {
               <td style="padding:10px 14px;">עד ${plan.time}</td>
             </tr>
           </table>
-          <p>נשלח אליך משוב מפורט בהקדם. זכור — אנחנו כותשים בטון נעים 😉</p>
+          <p>נשלח אליך משוב מפורט בהקדם. הכינו את הטישו 😉</p>
           <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
           <p style="color:#999;font-size:12px;">LawRoast · ביקורת משפטית שלא תשכח</p>
         </div>
