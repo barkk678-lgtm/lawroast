@@ -14,31 +14,31 @@ export default async function handler(req, res) {
   });
 
   try {
+    // ← זה החלק החדש - טוען את הקובץ ומצרף אותו למייל
+    let attachments = [];
+    if (fileUrl) {
+      const fileRes = await fetch(fileUrl);
+      const fileBuffer = Buffer.from(await fileRes.arrayBuffer());
+      const fileName = decodeURIComponent(fileUrl.split('/').pop().split('?')[0]) || 'עבודה_בדוקה.pdf';
+      attachments = [{ filename: fileName, content: fileBuffer }];
+    }
+
     await transporter.sendMail({
       from: `"LawRoast 🔥" <${process.env.GMAIL_USER}>`,
       to: email,
       subject: `📝 המשוב על עבודתך מוכן — ${course}`,
+      attachments, // ← זה מצרף את הקובץ
       html: `
         <div dir="rtl" style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
           <h2 style="color:#dc2626;">🔥 המשוב שלך מוכן</h2>
           <p>שלום <strong>${name}</strong>,</p>
           <p>סיימנו לבדוק את עבודתך בנושא <strong>${course}</strong>.</p>
-
           ${feedback ? `
-          <div style="background:#f9f8f5;border-right:4px solid #dc2626;padding:16px 20px;margin:20px 0;border-radius:4px;">
-            <p style="margin:0;line-height:1.7;white-space:pre-wrap;">${feedback}</p>
-          </div>
+            <div style="background:#f9f8f5;border-right:4px solid #dc2626;padding:16px 20px;margin:20px 0;border-radius:4px;">
+              <p style="margin:0;line-height:1.7;white-space:pre-wrap;">${feedback}</p>
+            </div>
           ` : ''}
-
-          ${fileUrl ? `
-          <p>
-            <a href="${fileUrl}"
-               style="background:#dc2626;color:white;padding:12px 24px;text-decoration:none;border-radius:8px;display:inline-block;font-weight:bold;">
-              ⬇️ הורד את העבודה הבדוקה
-            </a>
-          </p>
-          ` : ''}
-
+          <p>העבודה הבדוקה מצורפת למייל זה.</p>
           <hr style="border:none;border-top:1px solid #eee;margin:24px 0;" />
           <p style="color:#999;font-size:12px;">LawRoast · ביקורת משפטית שלא תשכח</p>
         </div>
