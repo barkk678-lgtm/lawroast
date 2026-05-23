@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelList } from "recharts";
 import { LogOut, Clock, CheckCircle, Upload, X, Users, Flame, Mail, Search, RefreshCw, Trash2, RotateCcw } from "lucide-react";
 
-/* ── Supabase ── */
 const SUPA = "https://iohmakgsmmrjssacmmvx.supabase.co";
 const KEY  = "sb_publishable_6BamgDCcnhBq1r1JJ28M8Q_nkb7qKeu";
 const H    = {"apikey":KEY,"Authorization":`Bearer ${KEY}`,"Content-Type":"application/json","Prefer":"return=representation"};
@@ -20,7 +19,6 @@ const db = {
   },
 };
 
-/* ── Constants ── */
 const PLANS = [
   { id:1, name:"סטנדרטי", price:120, hours:120, accent:"#818cf8", glowBg:"rgba(129,140,248,0.09)", glowBorder:"rgba(129,140,248,0.5)", tagline:"לא דחוף? גם אנחנו לא ממהרים", features:['בדיקה ע"י עו"ד מנוסה','הערות כתובות מפורטות','ניתוח חוזקות וחולשות','כתישה בטון נעים'] },
   { id:2, name:"מהיר", price:150, hours:72, accent:"#fb923c", glowBg:"rgba(251,146,60,0.09)", glowBorder:"rgba(251,146,60,0.5)", tagline:"כי הדד-ליין מתקרב ואתה יודע את זה", features:['בדיקה ע"י עו"ד מנוסה','הערות כתובות מפורטות','ניתוח חוזקות וחולשות','כתישה בטון נעים','עדיפות בתור'] },
@@ -91,22 +89,15 @@ textarea.fiw{resize:vertical}
 .del-btn:hover{border-color:#fca5a5!important;color:#dc2626!important;background:rgba(220,38,38,.05)!important}
 `;
 
-/* ── Drawer ── */
 function Drawer({ order, onClose, onStatusChange }) {
   const [roast,setRoast]=useState(""), [phase,setPhase]=useState(0), [ffile,setFfile]=useState(null);
   const [,setTick]=useState(0); const fref=useRef();
   useEffect(()=>{ const id=setInterval(()=>setTick(t=>t+1),1000); return ()=>clearInterval(id); },[]);
-  useEffect(()=>{
-    try{
-      if(window.location.hash==='#admin'){
-        if(sessionStorage.getItem('lr_auth')==='1') setView('admin');
-        else setLoginOpen(true);
-      }
-    }catch{}
-  },[]);
+
   const remaining=(order.submittedAt+order.plan.hours*3600000)-Date.now();
   const isUrg=remaining<3*3600000&&order.status!=="נשלח משוב";
   const st=SS[order.status];
+
   const send=async()=>{
     setPhase(1); await new Promise(r=>setTimeout(r,1300));
     setPhase(2); await new Promise(r=>setTimeout(r,1300));
@@ -115,6 +106,7 @@ function Drawer({ order, onClose, onStatusChange }) {
     const fUrl=order.paper_path?`${SUPA}/storage/v1/object/public/papers/${order.paper_path}`:null;
     fetch('/api/send-feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:order.name,email:order.email,course:order.course,feedback:roast,fileUrl:fUrl})}).catch(()=>{});
   };
+
   const fileUrl = path => path ? `${SUPA}/storage/v1/object/public/papers/${path}` : null;
   const instrName = order.instructions_path ? order.instructions_path.split("/").pop() : `הנחיות_${order.course}.pdf`;
   const paperName = order.paper_path ? order.paper_path.split("/").pop() : `עבודה_${order.name.split(" ")[0]}.docx`;
@@ -180,7 +172,6 @@ function Drawer({ order, onClose, onStatusChange }) {
   );
 }
 
-/* ── App ── */
 export default function App() {
   const [view,setView]=useState("landing"), [adminTab,setAdminTab]=useState("live");
   const [loginOpen,setLoginOpen]=useState(false);
@@ -199,12 +190,20 @@ export default function App() {
   const instrRef=useRef(), paperRef=useRef(), formRef=useRef();
 
   useEffect(()=>{ const id=setInterval(()=>setTick(t=>t+1),1000); return ()=>clearInterval(id); },[]);
+  useEffect(()=>{
+    try{
+      if(window.location.hash==='#admin'){
+        if(sessionStorage.getItem('lr_auth')==='1') setView('admin');
+        else setLoginOpen(true);
+      }
+    }catch{}
+  },[]);
 
-  const loadOrders = useCallback(async()=>{
+  const loadOrders=useCallback(async()=>{
     setDbLoading(true); setDbError(null);
-    try { const rows=await db.getOrders(); setOrders(rows.map(rowToOrder)); setLastSync(Date.now()); }
+    try{ const rows=await db.getOrders(); setOrders(rows.map(rowToOrder)); setLastSync(Date.now()); }
     catch(e){ setDbError("שגיאת התחברות לשרת — "+(typeof e==="string"?e:"בדוק חיבור")); }
-    finally { setDbLoading(false); }
+    finally{ setDbLoading(false); }
   },[]);
 
   useEffect(()=>{
@@ -251,21 +250,21 @@ export default function App() {
     if(!form.name.trim()){ setFormError("⚠️ אנא מלא שם מלא"); return; }
     if(!form.email.trim()){ setFormError("⚠️ אנא מלא כתובת מייל"); return; }
     setFormError(null); setSubmitting(true);
-    try {
+    try{
       const orderId=crypto.randomUUID();
       await db.insertOrder({id:orderId,name:form.name,email:form.email,gender:form.gender,institution:form.institution,year:form.year,course:form.course,plan_id:selPlan,notes:form.notes,status:"התקבל"});
       let fileError=null;
-      try {
+      try{
         const ext=f=>f.name.split('.').pop().replace(/[^a-zA-Z0-9]/g,'').toLowerCase()||'bin';
         const ip=instrFile?await db.uploadFile(instrFile,`${orderId}/instructions.${ext(instrFile)}`):null;
         const pp=paperFile?await db.uploadFile(paperFile,`${orderId}/paper.${ext(paperFile)}`):null;
         if(ip||pp) await db.patchOrder(orderId,{instructions_path:ip,paper_path:pp});
-      } catch(e){ fileError=String(e); }
+      }catch(e){ fileError=String(e); }
       fetch('/api/send-confirmation',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:form.name,email:form.email,course:form.course,planId:selPlan,orderId})}).catch(()=>{});
       setSubmitted(true);
       if(fileError) setTimeout(()=>alert("⚠️ ההגשה נשמרה אבל הקבצים לא הועלו:\n"+fileError),300);
-    } catch(e){ setFormError("❌ שגיאה בשליחה: "+(typeof e==="string"?e:(e?.message||JSON.stringify(e)))); }
-    finally { setSubmitting(false); }
+    }catch(e){ setFormError("❌ שגיאה בשליחה: "+(typeof e==="string"?e:(e?.message||JSON.stringify(e)))); }
+    finally{ setSubmitting(false); }
   };
 
   const activeOrders  = orders.filter(o=>!o.deleted_at&&o.status!=="נשלח משוב");
@@ -283,7 +282,7 @@ export default function App() {
     const ds=new Date(today0.getTime()); ds.setDate(ds.getDate()+i);
     const de=new Date(ds.getTime()); de.setDate(de.getDate()+1);
     const dayNames=["א'","ב'","ג'","ד'","ה'","ו'","ש'"];
-    return {name:`יום ${dayNames[ds.getDay()]}`,dayStart:ds.getTime(),dayEnd:de.getTime(),עבודות:activeOrders.filter(o=>{const dl=o.submittedAt+o.plan.hours*3600000;return dl>=ds.getTime()&&dl<de.getTime();}).length};
+    return{name:`יום ${dayNames[ds.getDay()]}`,dayStart:ds.getTime(),dayEnd:de.getTime(),עבודות:activeOrders.filter(o=>{const dl=o.submittedAt+o.plan.hours*3600000;return dl>=ds.getTime()&&dl<de.getTime();}).length};
   });
 
   const handleChartClick=(type,data)=>{
@@ -313,7 +312,7 @@ export default function App() {
   const hasFilters=chartFilter||tableSearch||statusFilter;
   const syncAgo=lastSync?Math.floor((Date.now()-lastSync)/1000):null;
 
-  const OrderTable = ({rows, showDelete=true}) => (
+  const OrderTable=({rows})=>(
     <div style={{overflowX:"auto"}}>
       <table style={{width:"100%",borderCollapse:"collapse",direction:"rtl"}}>
         <thead><tr style={{borderBottom:"1px solid #f1f5f9",background:"#fafafa"}}>
@@ -331,7 +330,7 @@ export default function App() {
           {rows.map(o=>{
             const rem=(o.submittedAt+o.plan.hours*3600000)-Date.now();
             const urgRow=rem<3*3600000; const st=SS[o.status];
-            return (
+            return(
               <tr key={o.id} className="trow" onClick={()=>setSel(o)} style={{borderBottom:"1px solid #f8fafc",cursor:"pointer"}}>
                 <td style={{padding:"11px 13px"}}><div style={{fontWeight:700,fontSize:"13px",color:"#0f172a"}}>{o.name}</div><div style={{fontSize:"10px",color:"#94a3b8"}}>{o.email}</div></td>
                 <td style={{padding:"11px 13px",fontSize:"11px",color:"#64748b",whiteSpace:"nowrap"}}>{o.institution.replace("אוניברסיטת ","")}</td>
@@ -344,7 +343,7 @@ export default function App() {
                   </select>
                 </td>
                 <td style={{padding:"11px 13px"}} onClick={e=>e.stopPropagation()}>
-                  {showDelete&&<button className="del-btn" title="העבר לסל מחזור" onClick={()=>softDelete(o.id)}><Trash2 size={13}/></button>}
+                  <button className="del-btn" title="העבר לסל מחזור" onClick={()=>softDelete(o.id)}><Trash2 size={13}/></button>
                 </td>
               </tr>
             );
@@ -354,8 +353,7 @@ export default function App() {
     </div>
   );
 
-  /* ── ADMIN ── */
-  if(view==="admin") return (
+  if(view==="admin") return(
     <>
       <style>{css}</style>
       {sel&&<Drawer order={sel} onClose={()=>setSel(null)} onStatusChange={updateStatus}/>}
@@ -377,17 +375,15 @@ export default function App() {
             {syncAgo!==null&&!dbLoading&&<span style={{fontSize:"10px",color:"#94a3b8"}}>{syncAgo<10?"עודכן זה עתה":`עודכן לפני ${syncAgo}ש׳`}</span>}
             {dbLoading&&<div className="spin-a" style={{width:"14px",height:"14px",border:"2px solid #e2e8f0",borderTop:"2px solid #6366f1",borderRadius:"50%",flexShrink:0}}/>}
             <button onClick={loadOrders} style={{display:"flex",alignItems:"center",gap:"5px",background:"#f8fafc",border:"1px solid #e2e8f0",color:"#64748b",borderRadius:"7px",padding:"6px 10px",cursor:"pointer",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700}}><RefreshCw size={12}/></button>
-            <button onClick={()=>setView("landing")} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(220,38,38,.06)",border:"1px solid rgba(220,38,38,.2)",color:"#dc2626",borderRadius:"8px",padding:"7px 12px",cursor:"pointer",fontFamily:"'Heebo',sans-serif",fontSize:"12px",fontWeight:700}}><LogOut size={13}/> התנתק</button>
+            <button onClick={()=>{try{sessionStorage.removeItem('lr_auth');}catch{}window.location.hash='';setView("landing");}} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(220,38,38,.06)",border:"1px solid rgba(220,38,38,.2)",color:"#dc2626",borderRadius:"8px",padding:"7px 12px",cursor:"pointer",fontFamily:"'Heebo',sans-serif",fontSize:"12px",fontWeight:700}}><LogOut size={13}/> התנתק</button>
           </div>
         </header>
-
         <main style={{padding:"20px",maxWidth:"1280px",margin:"0 auto"}}>
           {dbError&&<div style={{background:"rgba(239,68,68,.06)",border:"1px solid rgba(239,68,68,.22)",borderRadius:"10px",padding:"12px 16px",marginBottom:"14px",display:"flex",alignItems:"center",gap:"10px",fontFamily:"'Heebo',sans-serif"}}>
             <span style={{fontSize:"16px"}}>⚠️</span><span style={{fontSize:"12px",color:"#dc2626",flex:1}}>{dbError}</span>
             <button onClick={loadOrders} style={{background:"rgba(220,38,38,.08)",border:"1px solid rgba(220,38,38,.2)",borderRadius:"6px",padding:"4px 10px",color:"#dc2626",fontSize:"11px",fontWeight:700,cursor:"pointer",fontFamily:"'Heebo',sans-serif"}}>נסה שוב</button>
           </div>}
 
-          {/* ── LIVE TAB ── */}
           {adminTab==="live"&&<>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:"11px",marginBottom:"16px"}}>
               {[
@@ -402,7 +398,6 @@ export default function App() {
                 </div>
               ))}
             </div>
-
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:"11px",marginBottom:"16px"}}>
               {[
                 {title:"📊 התפלגות מסלולים",data:planData,dk:"הזמנות",type:"plan",colored:true,fmtLbl:v=>v,fmtTip:v=>[v,"הזמנות"]},
@@ -425,7 +420,7 @@ export default function App() {
                           let fill=ch.colored?e.fill:(ch.weekly&&j===0?"#f97316":ch.color);
                           const dim=chartFilter?.type===ch.type&&(ch.type==="plan"?chartFilter.planId!==e.planId:ch.type==="course"?chartFilter.course!==e.fullCourse:chartFilter.dayStart!==e.dayStart);
                           const act=chartFilter?.type===ch.type&&(ch.type==="plan"?chartFilter.planId===e.planId:ch.type==="course"?chartFilter.course===e.fullCourse:chartFilter.dayStart===e.dayStart);
-                          return <Cell key={j} fill={act?"#ef4444":fill} opacity={dim?0.3:1}/>;
+                          return<Cell key={j} fill={act?"#ef4444":fill} opacity={dim?0.3:1}/>;
                         })}
                       </Bar>
                     </BarChart>
@@ -433,7 +428,6 @@ export default function App() {
                 </div>
               ))}
             </div>
-
             <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:"12px",overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
               <div style={{padding:"13px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"8px"}}>
                 <h3 style={{fontWeight:900,fontSize:"14px",color:"#0f172a"}}>🔥 Live Tasks</h3>
@@ -456,21 +450,16 @@ export default function App() {
             </div>
           </>}
 
-          {/* ── ARCHIVE TAB ── */}
           {adminTab==="archive"&&(
             <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:"12px",overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
               <div style={{padding:"13px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:"8px"}}>
                 <span style={{fontSize:"15px"}}>📁</span><h3 style={{fontWeight:900,fontSize:"14px",color:"#0f172a"}}>ארכיון — עבודות שנשלח עליהן משוב</h3>
                 <span style={{background:"rgba(22,163,74,.08)",border:"1px solid rgba(22,163,74,.22)",color:"#16a34a",borderRadius:"100px",padding:"1px 9px",fontSize:"11px",fontWeight:700}}>{archivedOrders.length}</span>
               </div>
-              {archivedOrders.length===0
-                ?<div style={{padding:"40px",textAlign:"center",color:"#94a3b8",fontFamily:"'Heebo',sans-serif",fontSize:"13px"}}><div style={{fontSize:"30px",marginBottom:"8px"}}>📭</div>הארכיון ריק</div>
-                :<OrderTable rows={archivedOrders}/>
-              }
+              {archivedOrders.length===0?<div style={{padding:"40px",textAlign:"center",color:"#94a3b8",fontFamily:"'Heebo',sans-serif",fontSize:"13px"}}><div style={{fontSize:"30px",marginBottom:"8px"}}>📭</div>הארכיון ריק</div>:<OrderTable rows={archivedOrders}/>}
             </div>
           )}
 
-          {/* ── TRASH TAB ── */}
           {adminTab==="trash"&&(
             <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:"12px",overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
               <div style={{padding:"13px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"8px",flexWrap:"wrap"}}>
@@ -479,46 +468,29 @@ export default function App() {
                   <h3 style={{fontWeight:900,fontSize:"14px",color:"#0f172a"}}>סל מחזור</h3>
                   {trashOrders.length>0&&<span style={{background:"rgba(220,38,38,.08)",border:"1px solid rgba(220,38,38,.2)",color:"#dc2626",borderRadius:"100px",padding:"1px 9px",fontSize:"11px",fontWeight:700}}>{trashOrders.length}</span>}
                 </div>
-                {trashOrders.length>0&&(
-                  <button onClick={()=>{if(window.confirm("למחוק לצמיתות את כל הפריטים בסל?"))trashOrders.forEach(o=>hardDelete(o.id));}}
-                    style={{background:"rgba(220,38,38,.06)",border:"1px solid rgba(220,38,38,.22)",borderRadius:"7px",padding:"6px 14px",color:"#dc2626",fontFamily:"'Heebo',sans-serif",fontSize:"12px",fontWeight:700,cursor:"pointer"}}>
-                    ריקון סל מחזור
-                  </button>
-                )}
+                {trashOrders.length>0&&<button onClick={()=>{if(window.confirm("למחוק לצמיתות את כל הפריטים בסל?"))trashOrders.forEach(o=>hardDelete(o.id));}} style={{background:"rgba(220,38,38,.06)",border:"1px solid rgba(220,38,38,.22)",borderRadius:"7px",padding:"6px 14px",color:"#dc2626",fontFamily:"'Heebo',sans-serif",fontSize:"12px",fontWeight:700,cursor:"pointer"}}>ריקון סל מחזור</button>}
               </div>
-              {trashOrders.length===0
-                ?<div style={{padding:"40px",textAlign:"center",color:"#94a3b8",fontFamily:"'Heebo',sans-serif",fontSize:"13px"}}><div style={{fontSize:"30px",marginBottom:"8px"}}>🗑️</div>הסל ריק</div>
-                :<div style={{overflowX:"auto"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse",direction:"rtl"}}>
-                    <thead><tr style={{borderBottom:"1px solid #f1f5f9",background:"#fafafa"}}>
-                      {["שם","קורס","מסלול","נמחק לפני",""].map(h=><th key={h} style={{padding:"9px 13px",textAlign:"right",fontSize:"10px",color:"#94a3b8",fontWeight:700,letterSpacing:".05em"}}>{h}</th>)}
-                    </tr></thead>
-                    <tbody>
-                      {trashOrders.map(o=>{
-                        const h=hoursAgo(o.deleted_at);
-                        return (
-                          <tr key={o.id} style={{borderBottom:"1px solid #f8fafc",opacity:0.75}}>
-                            <td style={{padding:"11px 13px"}}><div style={{fontWeight:700,fontSize:"13px",color:"#0f172a"}}>{o.name}</div><div style={{fontSize:"10px",color:"#94a3b8"}}>{o.email}</div></td>
-                            <td style={{padding:"11px 13px",fontSize:"11px",color:"#475569"}}>{o.course}</td>
-                            <td style={{padding:"11px 13px"}}><span style={{background:o.plan.accent+"18",border:`1px solid ${o.plan.accent}40`,color:o.plan.accent,borderRadius:"100px",padding:"2px 8px",fontSize:"11px",fontWeight:700}}>{o.plan.name} · ₪{o.plan.price}</span></td>
-                            <td style={{padding:"11px 13px",fontSize:"11px",color:"#94a3b8",fontFamily:"monospace"}}>{h>=48?`${Math.floor(h/24)} ימים`:`${h} שעות`}</td>
-                            <td style={{padding:"11px 13px"}} onClick={e=>e.stopPropagation()}>
-                              <div style={{display:"flex",gap:"6px",justifyContent:"flex-end"}}>
-                                <button onClick={()=>restore(o.id)} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(99,102,241,.08)",border:"1px solid rgba(99,102,241,.25)",borderRadius:"6px",padding:"5px 10px",color:"#6366f1",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700,cursor:"pointer"}}>
-                                  <RotateCcw size={12}/> שחזר
-                                </button>
-                                <button onClick={()=>{if(window.confirm("למחוק לצמיתות?"))hardDelete(o.id);}} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(220,38,38,.06)",border:"1px solid rgba(220,38,38,.2)",borderRadius:"6px",padding:"5px 10px",color:"#dc2626",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700,cursor:"pointer"}}>
-                                  <Trash2 size={12}/> מחק לצמיתות
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              }
+              {trashOrders.length===0?<div style={{padding:"40px",textAlign:"center",color:"#94a3b8",fontFamily:"'Heebo',sans-serif",fontSize:"13px"}}><div style={{fontSize:"30px",marginBottom:"8px"}}>🗑️</div>הסל ריק</div>
+              :<div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",direction:"rtl"}}>
+                <thead><tr style={{borderBottom:"1px solid #f1f5f9",background:"#fafafa"}}>
+                  {["שם","קורס","מסלול","נמחק לפני",""].map(h=><th key={h} style={{padding:"9px 13px",textAlign:"right",fontSize:"10px",color:"#94a3b8",fontWeight:700,letterSpacing:".05em"}}>{h}</th>)}
+                </tr></thead>
+                <tbody>{trashOrders.map(o=>{
+                  const h=hoursAgo(o.deleted_at);
+                  return(<tr key={o.id} style={{borderBottom:"1px solid #f8fafc",opacity:0.75}}>
+                    <td style={{padding:"11px 13px"}}><div style={{fontWeight:700,fontSize:"13px",color:"#0f172a"}}>{o.name}</div><div style={{fontSize:"10px",color:"#94a3b8"}}>{o.email}</div></td>
+                    <td style={{padding:"11px 13px",fontSize:"11px",color:"#475569"}}>{o.course}</td>
+                    <td style={{padding:"11px 13px"}}><span style={{background:o.plan.accent+"18",border:`1px solid ${o.plan.accent}40`,color:o.plan.accent,borderRadius:"100px",padding:"2px 8px",fontSize:"11px",fontWeight:700}}>{o.plan.name} · ₪{o.plan.price}</span></td>
+                    <td style={{padding:"11px 13px",fontSize:"11px",color:"#94a3b8",fontFamily:"monospace"}}>{h>=48?`${Math.floor(h/24)} ימים`:`${h} שעות`}</td>
+                    <td style={{padding:"11px 13px"}} onClick={e=>e.stopPropagation()}>
+                      <div style={{display:"flex",gap:"6px",justifyContent:"flex-end"}}>
+                        <button onClick={()=>restore(o.id)} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(99,102,241,.08)",border:"1px solid rgba(99,102,241,.25)",borderRadius:"6px",padding:"5px 10px",color:"#6366f1",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700,cursor:"pointer"}}><RotateCcw size={12}/> שחזר</button>
+                        <button onClick={()=>{if(window.confirm("למחוק לצמיתות?"))hardDelete(o.id);}} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(220,38,38,.06)",border:"1px solid rgba(220,38,38,.2)",borderRadius:"6px",padding:"5px 10px",color:"#dc2626",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700,cursor:"pointer"}}><Trash2 size={12}/> מחק לצמיתות</button>
+                      </div>
+                    </td>
+                  </tr>);
+                })}</tbody>
+              </table></div>}
             </div>
           )}
         </main>
@@ -526,10 +498,9 @@ export default function App() {
     </>
   );
 
-  /* ── LANDING ── */
   const curPlan=PLANS.find(p=>p.id===selPlan);
 
-  if(submitted) return (
+  if(submitted) return(
     <>
       <style>{css}</style>
       <div dir="rtl" style={{background:"#fef7ef",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Heebo',sans-serif",textAlign:"center",padding:"2rem"}}>
@@ -542,7 +513,7 @@ export default function App() {
     </>
   );
 
-  return (
+  return(
     <>
       <style>{css}</style>
       {loginOpen&&(
@@ -591,7 +562,7 @@ export default function App() {
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:"20px"}}>
             {PLANS.map(plan=>{
               const isSel=selPlan===plan.id, isHov=hovP===plan.id;
-              return (
+              return(
                 <div key={plan.id}
                   onClick={()=>{setSelPlan(plan.id);setTimeout(()=>formRef.current?.scrollIntoView({behavior:"smooth",block:"start"}),80);}}
                   onMouseEnter={()=>setHovP(plan.id)} onMouseLeave={()=>setHovP(null)}
