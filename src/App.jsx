@@ -108,7 +108,7 @@ textarea.fiw{resize:vertical}
 const TESTIMONIALS = [
   {initials:"נ.ל",bg:"#fde8d8",tc:"#c2410c",name:"נ. לוי",sub:"דיני חוזים · שנה א׳ · TAU",text:'חשבתי שהעבודה שלי ממש טובה. הוא חשב אחרת. היה לו הרבה מה להגיד ואימצתי כמעט את הכל. עליתי מהעבודה הקודמת מ-78 ל-91.'},
   {initials:"י.מ",bg:"#dbeafe",tc:"#1d4ed8",name:"י. מזרחי",sub:"משפט חוקתי · שנה ב׳ · BIU",text:'קיבלתי את המשוב יום לפני ההגשה, ישבתי לתקן לילה שלם. לא נעים, אבל שווה. המרצה שלי שאל אם עברתי קורס כתיבה.'},
-  {initials:"ש.כ",bg:"#d1fae5",tc:"#065f46",name:"ש. כהן",sub:"משפט עונשין · שנה א׳ · Haifa",text:'הוא לא ריחם עלי וזה בדיוק מה שרציתי. כל הערה הייתה מדויקת. אני וחברה כתבנו את העבודות שלנו יחד, ואני קיבלתי 15 נקודות יותר.',hot:true},
+  {initials:"ש.כ",bg:"#d1fae5",tc:"#065f46",name:"ש. כהן",sub:"משפט עונשין · שנה א׳ · Haifa",text:'הוא לא ריחם עלי וזה בדיוק מה שרציתי. כל הערה הייתה מדויקת. אני וחברה כתבנו את העבודות שלנו יחד, ואני קיבלתי 15 נקודות יותר.'},
   {initials:"א.ר",bg:"#ede9fe",tc:"#5b21b6",name:"א. רוזנברג",sub:"דיני חוזים · שנה ב׳ · Reichman",text:'כואב לקרוא, אבל ממכר. ממש כמו שמסבירים באתר. הייתי אמור להיות עצבני, במקום זה ישבתי לתקן ישר. מסלול מהיר, קיבלתי תוך יומיים.'},
   {initials:"ת.א",bg:"#fef9c3",tc:"#92400e",name:"ת. אברהם",sub:"משפט חוקתי · שנה א׳ · TAU",text:'משוב מעולה, מקצועי ומצחיק. סוף סוף קצת קלילות באקדמיה. כתב לי "נקודה מצוינת אם היא הייתה נכונה". צחקתי, תיקנתי, קיבלתי 94.'},
 ];
@@ -133,6 +133,7 @@ function TestimonialCard({ r }) {
 function TestimonialsSection() {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [current, setCurrent] = useState(0);
+  const touchStartX = useRef(null);
 
   useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768);
@@ -146,6 +147,16 @@ function TestimonialsSection() {
     return () => clearInterval(id);
   }, [isMobile]);
 
+  const handleTouchStart = e => { touchStartX.current = e.touches[0].clientX; };
+  const handleTouchEnd = e => {
+    if (touchStartX.current === null) return;
+    const diff = touchStartX.current - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 40) {
+      setCurrent(c => diff > 0 ? (c + 1) % TESTIMONIALS.length : (c - 1 + TESTIMONIALS.length) % TESTIMONIALS.length);
+    }
+    touchStartX.current = null;
+  };
+
   return (
     <section style={{maxWidth:"1040px",margin:"0 auto",padding:"0 24px 60px",position:"relative",zIndex:1}}>
       <div style={{textAlign:"center",marginBottom:"2rem"}}>
@@ -154,7 +165,7 @@ function TestimonialsSection() {
 
       {isMobile ? (
         /* קרוסלה למובייל */
-        <div style={{position:"relative",overflow:"hidden"}}>
+        <div style={{position:"relative",overflow:"hidden"}} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
           <div style={{transition:"opacity .4s ease",opacity:1}}>
             <TestimonialCard r={TESTIMONIALS[current]} />
           </div>
