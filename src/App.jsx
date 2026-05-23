@@ -3,15 +3,14 @@ import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer, LabelL
 import { LogOut, Clock, CheckCircle, Upload, X, Users, Flame, Mail, Search, RefreshCw, Trash2, RotateCcw } from "lucide-react";
 
 const SUPA = "https://iohmakgsmmrjssacmmvx.supabase.co";
-const KEY  = "sb_publishable_6BamgDCcnhBq1r1JJ28M8Q_nkb7qKeu";
-const H    = {"apikey":KEY,"Authorization":`Bearer ${KEY}`,"Content-Type":"application/json","Prefer":"return=representation"};
-
+const KEY = "sb_publishable_6BamgDCcnhBq1r1JJ28M8Q_nkb7qKeu";
+const H = {"apikey":KEY,"Authorization":`Bearer ${KEY}`,"Content-Type":"application/json","Prefer":"return=representation"};
 const db = {
-  getOrders:   ()       => fetch(`${SUPA}/rest/v1/orders?select=*&order=created_at.desc`,{headers:H}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
-  insertOrder: d        => fetch(`${SUPA}/rest/v1/orders`,{method:"POST",headers:H,body:JSON.stringify(d)}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
-  patchOrder:  (id,d)   => fetch(`${SUPA}/rest/v1/orders?id=eq.${id}`,{method:"PATCH",headers:H,body:JSON.stringify(d)}).then(r=>r.ok?Promise.resolve():r.text().then(t=>Promise.reject(t))),
-  deleteOrder: (id)     => fetch(`${SUPA}/rest/v1/orders?id=eq.${id}`,{method:"DELETE",headers:H}).then(r=>r.ok?null:r.text().then(t=>Promise.reject(t))),
-  uploadFile:  async (f,path) => {
+  getOrders: () => fetch(`${SUPA}/rest/v1/orders?select=*&order=created_at.desc`,{headers:H}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
+  insertOrder: d => fetch(`${SUPA}/rest/v1/orders`,{method:"POST",headers:H,body:JSON.stringify(d)}).then(r=>r.ok?r.json():r.text().then(t=>Promise.reject(t))),
+  patchOrder: (id,d) => fetch(`${SUPA}/rest/v1/orders?id=eq.${id}`,{method:"PATCH",headers:H,body:JSON.stringify(d)}).then(r=>r.ok?Promise.resolve():r.text().then(t=>Promise.reject(t))),
+  deleteOrder: (id) => fetch(`${SUPA}/rest/v1/orders?id=eq.${id}`,{method:"DELETE",headers:H}).then(r=>r.ok?null:r.text().then(t=>Promise.reject(t))),
+  uploadFile: async (f,path) => {
     const encoded = path.split("/").map(encodeURIComponent).join("/");
     const r = await fetch(`${SUPA}/storage/v1/object/papers/${encoded}`,{method:"POST",headers:{"apikey":KEY,"Authorization":`Bearer ${KEY}`,"Content-Type":f.type||"application/octet-stream"},body:f});
     if(!r.ok){ const err=await r.text(); throw new Error(`Storage ${r.status}: ${err}`); }
@@ -24,16 +23,33 @@ const PLANS = [
   { id:2, name:"מהיר", price:150, hours:72, accent:"#fb923c", glowBg:"rgba(251,146,60,0.09)", glowBorder:"rgba(251,146,60,0.5)", tagline:"כי הדד-ליין מתקרב ואתה יודע את זה", features:['בדיקה ע"י עו"ד מנוסה','הערות כתובות מפורטות','ניתוח חוזקות וחולשות','כתישה בטון נעים','עדיפות בתור'] },
   { id:3, name:"SOS 🔥", price:200, hours:36, accent:"#ef4444", glowBg:"rgba(239,68,68,0.09)", glowBorder:"rgba(239,68,68,0.55)", tagline:"ההגשה מחר? אנחנו לא שופטים. קצת כן.", features:['בדיקה ע"י עו"ד מנוסה','הערות כתובות מפורטות','ניתוח חוזקות וחולשות','כתישה בטון נעים','עדיפות מקסימלית'], recommended:true },
 ];
-const INSTS   = ["אוניברסיטת תל אביב","אוניברסיטת בר אילן","אוניברסיטת חיפה","אוניברסיטת רייכמן","המכללה למנהל"];
-const YEARS   = ["שנה א'","שנה ב'","שנה ג'","שנה ד'"];
+
+// ← שינוי 2: רשימת מוסדות מורחבת
+const INSTS = [
+  "אוניברסיטת תל אביב",
+  "אוניברסיטת בר אילן",
+  "אוניברסיטת חיפה",
+  "אוניברסיטת רייכמן",
+  "האוניברסיטה העברית",
+  "המכללה למנהל",
+  "מכללת ספיר",
+  "המכללה האקדמית ספיר",
+  "הקריה האקדמית אונו",
+  "המרכז האקדמי למשפט ועסקים",
+  "שערי מדע ומשפט",
+  "המרכז האקדמי פרס",
+];
+
+const YEARS = ["שנה א'","שנה ב'","שנה ג'","שנה ד'"];
 const COURSES = ["משפט חוקתי","דיני חוזים","משפט עונשין"];
 const GENDERS = ["גבר","אישה","אחר"];
+
 const fmtPlanTime = h => h < 48 ? `${h} שעות` : `${Math.floor(h/24)} ימים`;
 
 const SS = {
-  "התקבל":    {color:"#64748b",bg:"rgba(100,116,139,0.09)",border:"rgba(100,116,139,0.28)"},
-  "בבדיקה":   {color:"#d97706",bg:"rgba(217,119,6,0.09)",  border:"rgba(217,119,6,0.3)"},
-  "נשלח משוב":{color:"#16a34a",bg:"rgba(22,163,74,0.09)",  border:"rgba(22,163,74,0.3)"},
+  "התקבל": {color:"#64748b",bg:"rgba(100,116,139,0.09)",border:"rgba(100,116,139,0.28)"},
+  "בבדיקה": {color:"#d97706",bg:"rgba(217,119,6,0.09)", border:"rgba(217,119,6,0.3)"},
+  "נשלח משוב":{color:"#16a34a",bg:"rgba(22,163,74,0.09)", border:"rgba(22,163,74,0.3)"},
 };
 
 const fmtMs = ms => {
@@ -93,11 +109,9 @@ function Drawer({ order, onClose, onStatusChange }) {
   const [roast,setRoast]=useState(""), [phase,setPhase]=useState(0), [ffile,setFfile]=useState(null);
   const [,setTick]=useState(0); const fref=useRef();
   useEffect(()=>{ const id=setInterval(()=>setTick(t=>t+1),1000); return ()=>clearInterval(id); },[]);
-
   const remaining=(order.submittedAt+order.plan.hours*3600000)-Date.now();
   const isUrg=remaining<3*3600000&&order.status!=="נשלח משוב";
   const st=SS[order.status];
-
   const send=async()=>{
     setPhase(1); await new Promise(r=>setTimeout(r,1300));
     setPhase(2); await new Promise(r=>setTimeout(r,1300));
@@ -113,11 +127,9 @@ function Drawer({ order, onClose, onStatusChange }) {
     }
     fetch('/api/send-feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:order.name,email:order.email,course:order.course,feedback:roast,fileAttachment})}).catch(()=>{});
   };
-
   const fileUrl = path => path ? `${SUPA}/storage/v1/object/public/papers/${path}` : null;
   const instrName = order.instructions_path ? order.instructions_path.split("/").pop() : `הנחיות_${order.course}.pdf`;
   const paperName = order.paper_path ? order.paper_path.split("/").pop() : `עבודה_${order.name.split(" ")[0]}.docx`;
-
   return (
     <>
       <div onClick={onClose} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.38)",zIndex:200,backdropFilter:"blur(3px)"}}/>
@@ -253,9 +265,16 @@ export default function App() {
 
   const handleSubmit=async()=>{
     if(submitting) return;
-    if(!selPlan){ setFormError("⚠️ אנא בחר מסלול לפני השליחה"); return; }
+    // ← שינוי 1: ולידציה לכל השדות החובה
+    if(!selPlan){ setFormError("⚠️ אנא בחר מסלול לפני השליחה"); formRef.current?.scrollIntoView({behavior:"smooth",block:"start"}); return; }
     if(!form.name.trim()){ setFormError("⚠️ אנא מלא שם מלא"); return; }
     if(!form.email.trim()){ setFormError("⚠️ אנא מלא כתובת מייל"); return; }
+    if(!form.gender){ setFormError("⚠️ אנא בחר מגדר"); return; }
+    if(!form.institution){ setFormError("⚠️ אנא בחר מוסד לימודים"); return; }
+    if(!form.year){ setFormError("⚠️ אנא בחר שנת לימוד"); return; }
+    if(!form.course){ setFormError("⚠️ אנא בחר קורס"); return; }
+    if(!instrFile){ setFormError("⚠️ אנא העלה את הנחיות העבודה"); return; }
+    if(!paperFile){ setFormError("⚠️ אנא העלה את קובץ העבודה"); return; }
     setFormError(null); setSubmitting(true);
     try{
       const orderId=crypto.randomUUID();
@@ -274,14 +293,12 @@ export default function App() {
     finally{ setSubmitting(false); }
   };
 
-  const activeOrders  = orders.filter(o=>!o.deleted_at&&o.status!=="נשלח משוב");
+  const activeOrders = orders.filter(o=>!o.deleted_at&&o.status!=="נשלח משוב");
   const archivedOrders= orders.filter(o=>!o.deleted_at&&o.status==="נשלח משוב");
-  const trashOrders   = orders.filter(o=>o.deleted_at);
-
+  const trashOrders = orders.filter(o=>o.deleted_at);
   const revenue=activeOrders.reduce((s,o)=>s+o.plan.price,0);
   const inProg=activeOrders.filter(o=>o.status==="בבדיקה").length;
   const urgCnt=activeOrders.filter(o=>o.plan.hours===36).length;
-
   const planData=PLANS.map(p=>({name:p.name.replace(" 🔥",""),planId:p.id,fill:p.accent,הזמנות:activeOrders.filter(o=>o.plan.id===p.id).length}));
   const courseData=COURSES.map(c=>({name:c.replace("משפט ","מ. ").replace("דיני ","ד. "),fullCourse:c,הכנסות:activeOrders.filter(o=>o.course===c).reduce((s,o)=>s+o.plan.price,0)}));
   const today0=new Date(); today0.setHours(0,0,0,0);
@@ -297,6 +314,7 @@ export default function App() {
     else if(type==="course"){if(chartFilter?.type==="course"&&chartFilter.course===data.fullCourse)setChartFilter(null);else setChartFilter({type:"course",course:data.fullCourse,label:data.name});}
     else if(type==="day"){if(chartFilter?.type==="day"&&chartFilter.dayStart===data.dayStart)setChartFilter(null);else setChartFilter({type:"day",dayStart:data.dayStart,dayEnd:data.dayEnd,label:data.name});}
   };
+
   const handleColSort=col=>setColSort(s=>s.col===col?{col,dir:s.dir==="asc"?"desc":"asc"}:{col,dir:"asc"});
 
   let displayOrders=[...activeOrders];
@@ -390,7 +408,6 @@ export default function App() {
             <span style={{fontSize:"16px"}}>⚠️</span><span style={{fontSize:"12px",color:"#dc2626",flex:1}}>{dbError}</span>
             <button onClick={loadOrders} style={{background:"rgba(220,38,38,.08)",border:"1px solid rgba(220,38,38,.2)",borderRadius:"6px",padding:"4px 10px",color:"#dc2626",fontSize:"11px",fontWeight:700,cursor:"pointer",fontFamily:"'Heebo',sans-serif"}}>נסה שוב</button>
           </div>}
-
           {adminTab==="live"&&<>
             <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(190px,1fr))",gap:"11px",marginBottom:"16px"}}>
               {[
@@ -456,7 +473,6 @@ export default function App() {
               }
             </div>
           </>}
-
           {adminTab==="archive"&&(
             <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:"12px",overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
               <div style={{padding:"13px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",gap:"8px"}}>
@@ -466,7 +482,6 @@ export default function App() {
               {archivedOrders.length===0?<div style={{padding:"40px",textAlign:"center",color:"#94a3b8",fontFamily:"'Heebo',sans-serif",fontSize:"13px"}}><div style={{fontSize:"30px",marginBottom:"8px"}}>📭</div>הארכיון ריק</div>:<OrderTable rows={archivedOrders}/>}
             </div>
           )}
-
           {adminTab==="trash"&&(
             <div style={{background:"#fff",border:"1px solid #e2e8f0",borderRadius:"12px",overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.04)"}}>
               <div style={{padding:"13px 16px",borderBottom:"1px solid #f1f5f9",display:"flex",alignItems:"center",justifyContent:"space-between",gap:"8px",flexWrap:"wrap"}}>
@@ -478,26 +493,26 @@ export default function App() {
                 {trashOrders.length>0&&<button onClick={()=>{if(window.confirm("למחוק לצמיתות את כל הפריטים בסל?"))trashOrders.forEach(o=>hardDelete(o.id));}} style={{background:"rgba(220,38,38,.06)",border:"1px solid rgba(220,38,38,.22)",borderRadius:"7px",padding:"6px 14px",color:"#dc2626",fontFamily:"'Heebo',sans-serif",fontSize:"12px",fontWeight:700,cursor:"pointer"}}>ריקון סל מחזור</button>}
               </div>
               {trashOrders.length===0?<div style={{padding:"40px",textAlign:"center",color:"#94a3b8",fontFamily:"'Heebo',sans-serif",fontSize:"13px"}}><div style={{fontSize:"30px",marginBottom:"8px"}}>🗑️</div>הסל ריק</div>
-              :<div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",direction:"rtl"}}>
-                <thead><tr style={{borderBottom:"1px solid #f1f5f9",background:"#fafafa"}}>
-                  {["שם","קורס","מסלול","נמחק לפני",""].map(h=><th key={h} style={{padding:"9px 13px",textAlign:"right",fontSize:"10px",color:"#94a3b8",fontWeight:700,letterSpacing:".05em"}}>{h}</th>)}
-                </tr></thead>
-                <tbody>{trashOrders.map(o=>{
-                  const h=hoursAgo(o.deleted_at);
-                  return(<tr key={o.id} style={{borderBottom:"1px solid #f8fafc",opacity:0.75}}>
-                    <td style={{padding:"11px 13px"}}><div style={{fontWeight:700,fontSize:"13px",color:"#0f172a"}}>{o.name}</div><div style={{fontSize:"10px",color:"#94a3b8"}}>{o.email}</div></td>
-                    <td style={{padding:"11px 13px",fontSize:"11px",color:"#475569"}}>{o.course}</td>
-                    <td style={{padding:"11px 13px"}}><span style={{background:o.plan.accent+"18",border:`1px solid ${o.plan.accent}40`,color:o.plan.accent,borderRadius:"100px",padding:"2px 8px",fontSize:"11px",fontWeight:700}}>{o.plan.name} · ₪{o.plan.price}</span></td>
-                    <td style={{padding:"11px 13px",fontSize:"11px",color:"#94a3b8",fontFamily:"monospace"}}>{h>=48?`${Math.floor(h/24)} ימים`:`${h} שעות`}</td>
-                    <td style={{padding:"11px 13px"}} onClick={e=>e.stopPropagation()}>
-                      <div style={{display:"flex",gap:"6px",justifyContent:"flex-end"}}>
-                        <button onClick={()=>restore(o.id)} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(99,102,241,.08)",border:"1px solid rgba(99,102,241,.25)",borderRadius:"6px",padding:"5px 10px",color:"#6366f1",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700,cursor:"pointer"}}><RotateCcw size={12}/> שחזר</button>
-                        <button onClick={()=>{if(window.confirm("למחוק לצמיתות?"))hardDelete(o.id);}} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(220,38,38,.06)",border:"1px solid rgba(220,38,38,.2)",borderRadius:"6px",padding:"5px 10px",color:"#dc2626",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700,cursor:"pointer"}}><Trash2 size={12}/> מחק לצמיתות</button>
-                      </div>
-                    </td>
-                  </tr>);
-                })}</tbody>
-              </table></div>}
+                :<div style={{overflowX:"auto"}}><table style={{width:"100%",borderCollapse:"collapse",direction:"rtl"}}>
+                  <thead><tr style={{borderBottom:"1px solid #f1f5f9",background:"#fafafa"}}>
+                    {["שם","קורס","מסלול","נמחק לפני",""].map(h=><th key={h} style={{padding:"9px 13px",textAlign:"right",fontSize:"10px",color:"#94a3b8",fontWeight:700,letterSpacing:".05em"}}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>{trashOrders.map(o=>{
+                    const h=hoursAgo(o.deleted_at);
+                    return(<tr key={o.id} style={{borderBottom:"1px solid #f8fafc",opacity:0.75}}>
+                      <td style={{padding:"11px 13px"}}><div style={{fontWeight:700,fontSize:"13px",color:"#0f172a"}}>{o.name}</div><div style={{fontSize:"10px",color:"#94a3b8"}}>{o.email}</div></td>
+                      <td style={{padding:"11px 13px",fontSize:"11px",color:"#475569"}}>{o.course}</td>
+                      <td style={{padding:"11px 13px"}}><span style={{background:o.plan.accent+"18",border:`1px solid ${o.plan.accent}40`,color:o.plan.accent,borderRadius:"100px",padding:"2px 8px",fontSize:"11px",fontWeight:700}}>{o.plan.name} · ₪{o.plan.price}</span></td>
+                      <td style={{padding:"11px 13px",fontSize:"11px",color:"#94a3b8",fontFamily:"monospace"}}>{h>=48?`${Math.floor(h/24)} ימים`:`${h} שעות`}</td>
+                      <td style={{padding:"11px 13px"}} onClick={e=>e.stopPropagation()}>
+                        <div style={{display:"flex",gap:"6px",justifyContent:"flex-end"}}>
+                          <button onClick={()=>restore(o.id)} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(99,102,241,.08)",border:"1px solid rgba(99,102,241,.25)",borderRadius:"6px",padding:"5px 10px",color:"#6366f1",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700,cursor:"pointer"}}><RotateCcw size={12}/> שחזר</button>
+                          <button onClick={()=>{if(window.confirm("למחוק לצמיתות?"))hardDelete(o.id);}} style={{display:"flex",alignItems:"center",gap:"5px",background:"rgba(220,38,38,.06)",border:"1px solid rgba(220,38,38,.2)",borderRadius:"6px",padding:"5px 10px",color:"#dc2626",fontFamily:"'Heebo',sans-serif",fontSize:"11px",fontWeight:700,cursor:"pointer"}}><Trash2 size={12}/> מחק לצמיתות</button>
+                        </div>
+                      </td>
+                    </tr>);
+                  })}</tbody>
+                </table></div>}
             </div>
           )}
         </main>
@@ -507,13 +522,18 @@ export default function App() {
 
   const curPlan=PLANS.find(p=>p.id===selPlan);
 
+  // ← שינוי 4: מסך לאחר הגשה עם הערת ספאם
   if(submitted) return(
     <>
       <style>{css}</style>
       <div dir="rtl" style={{background:"#fef7ef",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Heebo',sans-serif",textAlign:"center",padding:"2rem"}}>
         <div><div style={{fontSize:"5rem",marginBottom:"1rem"}}>🔥</div>
           <h2 style={{fontSize:"clamp(2rem,6vw,3rem)",fontWeight:900,color:"#dc2626",margin:"0 0 12px"}}>הקובץ התקבל.</h2>
-          <p style={{fontSize:"1.2rem",color:"#78716c",margin:"0 0 20px"}}>תכין את הדמעות — המשוב בדרך.</p>
+          <p style={{fontSize:"1.2rem",color:"#78716c",margin:"0 0 16px"}}>תכין את הדמעות — המשוב בדרך.</p>
+          <p style={{fontSize:"0.9rem",color:"#a8a29e",margin:"0 0 20px",lineHeight:1.7}}>
+            📧 אישור נשלח למייל שלך.<br/>
+            לא קיבלת? בדוק את תיקיית הספאם / קידומי מכירות.
+          </p>
           {curPlan&&<div style={{display:"inline-block",background:curPlan.glowBg,border:`1px solid ${curPlan.glowBorder}`,borderRadius:"100px",padding:"7px 20px",fontSize:"13px",color:curPlan.accent,fontWeight:700}}>מסלול {curPlan.name} · {fmtPlanTime(curPlan.hours)}</div>}
         </div>
       </div>
@@ -599,9 +619,31 @@ export default function App() {
         <section ref={formRef} style={{maxWidth:"680px",margin:"0 auto",padding:"0 24px 90px",position:"relative",zIndex:1}}>
           <div style={{background:"#fff",border:"2px solid #ede6dc",borderRadius:"20px",padding:"clamp(22px,5vw,38px)",boxShadow:"0 8px 32px rgba(220,38,38,.07),0 2px 8px rgba(0,0,0,.04)"}}>
             <div style={{textAlign:"center",marginBottom:"24px"}}>
-              <h2 style={{fontSize:"1.75rem",fontWeight:900,margin:"0 0 12px",color:"#1a1510"}}>שלח את העבודה לכתישה 🔥</h2>
-              {curPlan?<div style={{display:"inline-block",background:curPlan.glowBg,border:`1px solid ${curPlan.glowBorder}`,borderRadius:"100px",padding:"5px 17px",fontSize:"12px",color:curPlan.accent,fontWeight:700}}>מסלול {curPlan.name} — ₪{curPlan.price} — {fmtPlanTime(curPlan.hours)}</div>:<p style={{color:"#a8a29e",fontSize:"13px",margin:0}}>↑ בחר מסלול למעלה</p>}
+              <h2 style={{fontSize:"1.75rem",fontWeight:900,margin:"0 0 16px",color:"#1a1510"}}>שלח את העבודה לכתישה 🔥</h2>
+
+              {/* ← שינוי 6: חיווי מסלולים תמיד מוצג */}
+              <div style={{display:"flex",gap:"8px",justifyContent:"center",flexWrap:"wrap"}}>
+                {PLANS.map(p=>{
+                  const isSel=selPlan===p.id;
+                  return(
+                    <span key={p.id} onClick={()=>setSelPlan(p.id)} style={{
+                      background:isSel?p.glowBg:"transparent",
+                      border:`1px solid ${isSel?p.accent:"#d4cdc4"}`,
+                      borderRadius:"100px",
+                      padding:"5px 14px",
+                      fontSize:"12px",
+                      color:isSel?p.accent:"#a8a29e",
+                      fontWeight:700,
+                      cursor:"pointer",
+                      transition:"all .18s",
+                    }}>
+                      {p.name} · ₪{p.price}
+                    </span>
+                  );
+                })}
+              </div>
             </div>
+
             <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
               <div className="gc2">
                 <div><label className="lbl">שם מלא</label><input className="fi" type="text" placeholder="ישראל ישראלי" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></div>
@@ -648,12 +690,18 @@ export default function App() {
                   </div>
                 ))}
               </div>
+
               {formError&&<div style={{background:"rgba(220,38,38,.07)",border:"1px solid rgba(220,38,38,.25)",borderRadius:"10px",padding:"12px 16px",fontSize:"13px",color:"#b91c1c",fontWeight:600,fontFamily:"'Heebo',sans-serif"}}>{formError}</div>}
+
               <button onClick={handleSubmit} disabled={submitting} onMouseEnter={()=>!submitting&&setBtnHov(true)} onMouseLeave={()=>setBtnHov(false)}
                 style={{width:"100%",padding:"17px",borderRadius:"13px",border:"none",background:"linear-gradient(135deg,#dc2626,#f97316)",color:"#fff",fontFamily:"'Heebo',sans-serif",fontWeight:900,fontSize:"18px",cursor:submitting?"not-allowed":"pointer",opacity:submitting?0.8:btnHov?0.9:1,transform:!submitting&&btnHov?"scale(1.015)":"scale(1)",transition:"all .18s",boxShadow:btnHov&&!submitting?"0 12px 36px rgba(220,38,38,.38)":"0 4px 18px rgba(220,38,38,.22)",marginTop:"4px",display:"flex",alignItems:"center",justifyContent:"center",gap:"10px"}}>
                 {submitting?<><div className="spin-a" style={{width:"20px",height:"20px",border:"3px solid rgba(255,255,255,.35)",borderTop:"3px solid #fff",borderRadius:"50%",flexShrink:0}}/>שולח...</>:"הגש ל-ROAST 🔥"}
               </button>
-              <p style={{textAlign:"center",fontSize:"11px",color:"#a8a29e",margin:0}}>לאחר השליחה תקבל אישור במייל · תשלום לאחר קבלת ההצעה</p>
+
+              {/* ← שינויים 3 ו-5: הערת אזכור אחיד (ללא השורה הישנה) */}
+              <p style={{textAlign:"center",fontSize:"11px",color:"#a8a29e",margin:0}}>
+                ⚠️ הבדיקה אינה כוללת בדיקת האזכור האחיד
+              </p>
             </div>
           </div>
         </section>
