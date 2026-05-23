@@ -103,17 +103,15 @@ function Drawer({ order, onClose, onStatusChange }) {
     setPhase(2); await new Promise(r=>setTimeout(r,1300));
     setPhase(3);
     onStatusChange(order.id,"נשלח משוב");
-    let correctedUrl=null;
+    let fileAttachment=null;
     if(ffile){
-      try{
-        const ext=ffile.name.split('.').pop().replace(/[^a-zA-Z0-9]/g,'').toLowerCase()||'bin';
-        const path=`${order.id}/corrected.${ext}`;
-        const encoded=path.split("/").map(encodeURIComponent).join("/");
-        const r=await fetch(`${SUPA}/storage/v1/object/papers/${encoded}`,{method:"POST",headers:{"apikey":KEY,"Authorization":`Bearer ${KEY}`,"Content-Type":ffile.type||"application/octet-stream"},body:ffile});
-        if(r.ok) correctedUrl=`${SUPA}/storage/v1/object/public/papers/${path}`;
-      }catch{}
+      await new Promise(res=>{
+        const reader=new FileReader();
+        reader.onloadend=()=>{ fileAttachment={name:ffile.name,data:reader.result.split(',')[1],type:ffile.type||'application/octet-stream'}; res(); };
+        reader.readAsDataURL(ffile);
+      });
     }
-    fetch('/api/send-feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:order.name,email:order.email,course:order.course,feedback:roast,fileUrl:correctedUrl})}).catch(()=>{});
+    fetch('/api/send-feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:order.name,email:order.email,course:order.course,feedback:roast,fileAttachment})}).catch(()=>{});
   };
 
   const fileUrl = path => path ? `${SUPA}/storage/v1/object/public/papers/${path}` : null;
