@@ -610,21 +610,40 @@ export default function App() {
     </>
   );
 
+  const PAYBOX = {1:"https://links.payboxapp.com/ghGya7cru3b",2:"https://links.payboxapp.com/EaXPM0Rqu3b",3:"https://links.payboxapp.com/65h5qLbsu3b"};
   const curPlan=PLANS.find(p=>p.id===selPlan);
 
-  // ← שינוי 4: מסך לאחר הגשה עם הערת ספאם
+  // ← שינוי 4: מסך לאחר הגשה עם תשלום Paybox
   if(submitted) return(
     <>
       <style>{css}</style>
       <div dir="rtl" style={{background:"#fef7ef",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Heebo',sans-serif",textAlign:"center",padding:"2rem"}}>
-        <div><div style={{fontSize:"5rem",marginBottom:"1rem"}}>🔥</div>
-          <h2 style={{fontSize:"clamp(2rem,6vw,3rem)",fontWeight:900,color:"#dc2626",margin:"0 0 12px"}}>הקובץ התקבל.</h2>
-          <p style={{fontSize:"1.2rem",color:"#78716c",margin:"0 0 16px"}}>תכין את הדמעות — המשוב בדרך.</p>
-          <p style={{fontSize:"0.9rem",color:"#a8a29e",margin:"0 0 20px",lineHeight:1.7}}>
-            📧 אישור נשלח למייל שלך.<br/>
-            לא קיבלת? בדוק את תיקיית הספאם / קידומי מכירות.
+        <div style={{maxWidth:"480px",width:"100%"}}>
+          <div style={{fontSize:"5rem",marginBottom:"1rem"}}>🎉</div>
+          <h2 style={{fontSize:"clamp(1.8rem,5vw,2.6rem)",fontWeight:900,color:"#1a1510",margin:"0 0 10px"}}>ההגשה התקבלה בהצלחה!</h2>
+          <p style={{fontSize:"1rem",color:"#78716c",margin:"0 0 28px",lineHeight:1.7}}>
+            כל מה שנשאר הוא לשלם — ורק אז השעון מתחיל לרוץ 🕐
           </p>
-          {curPlan&&<div style={{display:"inline-block",background:curPlan.glowBg,border:`1px solid ${curPlan.glowBorder}`,borderRadius:"100px",padding:"7px 20px",fontSize:"13px",color:curPlan.accent,fontWeight:700}}>מסלול {curPlan.name} · {fmtPlanTime(curPlan.hours)}</div>}
+
+          {/* כרטיס תשלום */}
+          <div style={{background:"#fff",border:"2px solid rgba(220,38,38,.2)",borderRadius:"18px",padding:"24px",marginBottom:"20px",boxShadow:"0 8px 32px rgba(220,38,38,.08)"}}>
+            <p style={{fontSize:"13px",color:"#a8a29e",fontWeight:700,margin:"0 0 6px",letterSpacing:".05em"}}>סכום לתשלום</p>
+            {curPlan&&<div style={{fontSize:"2.8rem",fontWeight:900,color:"#dc2626",margin:"0 0 4px",lineHeight:1}}>₪{curPlan.price}</div>}
+            {curPlan&&<div style={{fontSize:"13px",color:"#a8a29e",marginBottom:"20px"}}>מסלול {curPlan.name} · זמן תגובה {fmtPlanTime(curPlan.hours)} מרגע התשלום</div>}
+            <a href={PAYBOX[selPlan]} target="_blank" rel="noreferrer" style={{display:"block",width:"100%",padding:"16px",borderRadius:"13px",border:"none",background:"linear-gradient(135deg,#dc2626,#f97316)",color:"#fff",fontFamily:"'Heebo',sans-serif",fontWeight:900,fontSize:"17px",textDecoration:"none",boxShadow:"0 4px 18px rgba(220,38,38,.28)",transition:"opacity .18s"}}>
+              💳 לתשלום בPaybox לחץ כאן
+            </a>
+          </div>
+
+          <div style={{background:"rgba(217,119,6,.06)",border:"1px solid rgba(217,119,6,.2)",borderRadius:"12px",padding:"14px 18px",marginBottom:"20px",textAlign:"right"}}>
+            <p style={{fontSize:"13px",color:"#92400e",fontWeight:700,margin:"0 0 6px"}}>⏳ חשוב לדעת</p>
+            <p style={{fontSize:"12px",color:"#78350f",margin:0,lineHeight:1.7}}>הבדיקה תתחיל <strong>רק לאחר קבלת התשלום</strong>.<br/>לא שילמת? העבודה לא נכנסת לתור.</p>
+          </div>
+
+          <p style={{fontSize:"11px",color:"#a8a29e",margin:0,lineHeight:1.7}}>
+            📧 אישור הגשה נשלח למייל שלך.<br/>
+            לא קיבלת? בדוק ספאם / קידומי מכירות.
+          </p>
         </div>
       </div>
     </>
