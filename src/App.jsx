@@ -612,6 +612,7 @@ export default function App() {
 
   const PAYBOX = {1:"https://links.payboxapp.com/ghGya7cru3b",2:"https://links.payboxapp.com/EaXPM0Rqu3b",3:"https://links.payboxapp.com/65h5qLbsu3b"};
   const curPlan=PLANS.find(p=>p.id===selPlan);
+  const isMobileDevice = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
   // ← שינוי 4: מסך לאחר הגשה עם תשלום Paybox
   if(submitted) return(
@@ -630,9 +631,22 @@ export default function App() {
             <p style={{fontSize:"13px",color:"#a8a29e",fontWeight:700,margin:"0 0 6px",letterSpacing:".05em"}}>סכום לתשלום</p>
             {curPlan&&<div style={{fontSize:"2.8rem",fontWeight:900,color:"#dc2626",margin:"0 0 4px",lineHeight:1}}>₪{curPlan.price}</div>}
             {curPlan&&<div style={{fontSize:"13px",color:"#a8a29e",marginBottom:"20px"}}>מסלול {curPlan.name} · זמן תגובה {fmtPlanTime(curPlan.hours)} מרגע התשלום</div>}
-            <a href={PAYBOX[selPlan]} target="_blank" rel="noreferrer" style={{display:"block",width:"100%",padding:"16px",borderRadius:"13px",border:"none",background:"linear-gradient(135deg,#dc2626,#f97316)",color:"#fff",fontFamily:"'Heebo',sans-serif",fontWeight:900,fontSize:"17px",textDecoration:"none",boxShadow:"0 4px 18px rgba(220,38,38,.28)",transition:"opacity .18s"}}>
-              💳 לתשלום בPaybox לחץ כאן
-            </a>
+            {/* מובייל = כפתור, דסקטופ = QR */}
+            {isMobileDevice ? (
+              <a href={PAYBOX[selPlan]} target="_blank" rel="noreferrer" style={{display:"block",width:"100%",padding:"16px",borderRadius:"13px",border:"none",background:"linear-gradient(135deg,#dc2626,#f97316)",color:"#fff",fontFamily:"'Heebo',sans-serif",fontWeight:900,fontSize:"17px",textDecoration:"none",boxShadow:"0 4px 18px rgba(220,38,38,.28)"}}>
+                💳 לתשלום בPaybox לחץ כאן
+              </a>
+            ) : (
+              <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"12px"}}>
+                <p style={{fontSize:"13px",color:"#57534e",fontWeight:700,margin:0}}>סרוק עם הטלפון לתשלום ב-Paybox</p>
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(PAYBOX[selPlan])}&bgcolor=ffffff&color=1a1510&margin=10`}
+                  alt="QR לתשלום"
+                  style={{width:"180px",height:"180px",borderRadius:"12px",border:"2px solid #ede6dc",boxShadow:"0 4px 14px rgba(0,0,0,.08)"}}
+                />
+                <p style={{fontSize:"11px",color:"#a8a29e",margin:0}}>או <a href={PAYBOX[selPlan]} target="_blank" rel="noreferrer" style={{color:"#dc2626",fontWeight:700}}>לחץ כאן</a> לפתיחה בדפדפן</p>
+              </div>
+            )}
           </div>
 
           <div style={{background:"rgba(217,119,6,.06)",border:"1px solid rgba(217,119,6,.2)",borderRadius:"12px",padding:"14px 18px",marginBottom:"20px",textAlign:"right"}}>
