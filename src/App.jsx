@@ -19,9 +19,9 @@ const db = {
 };
 
 const PLANS = [
-  { id:1, name:"סטנדרטי", price:120, hours:120, accent:"#818cf8", glowBg:"rgba(129,140,248,0.09)", glowBorder:"rgba(129,140,248,0.5)", tagline:"לא דחוף? גם אנחנו לא ממהרים", features:['בדיקה ע"י עו"ד מנוסה','הערות כתובות מפורטות','ניתוח חוזקות וחולשות','כתישה בטון נעים'] },
-  { id:2, name:"מהיר", price:150, hours:72, accent:"#fb923c", glowBg:"rgba(251,146,60,0.09)", glowBorder:"rgba(251,146,60,0.5)", tagline:"כי הדד-ליין מתקרב ואתה יודע את זה", features:['בדיקה ע"י עו"ד מנוסה','הערות כתובות מפורטות','ניתוח חוזקות וחולשות','כתישה בטון נעים','עדיפות בתור'] },
-  { id:3, name:"SOS 🔥", price:200, hours:36, accent:"#ef4444", glowBg:"rgba(239,68,68,0.09)", glowBorder:"rgba(239,68,68,0.55)", tagline:"ההגשה מחר? אנחנו לא שופטים. קצת כן.", features:['בדיקה ע"י עו"ד מנוסה','הערות כתובות מפורטות','ניתוח חוזקות וחולשות','כתישה בטון נעים','עדיפות מקסימלית'], recommended:true },
+  { id:1, name:"סטנדרטי", price:120, salePrice:95, hours:120, accent:"#818cf8", glowBg:"rgba(129,140,248,0.09)", glowBorder:"rgba(129,140,248,0.5)", tagline:"לא דחוף? גם אנחנו לא ממהרים", features:['בדיקה ע"י עו"ד מנוסה','הערות כתובות מפורטות','ניתוח חוזקות וחולשות','כתישה בטון נעים'] },
+  { id:2, name:"מהיר", price:150, salePrice:125, hours:72, accent:"#fb923c", glowBg:"rgba(251,146,60,0.09)", glowBorder:"rgba(251,146,60,0.5)", tagline:"כי הדד-ליין מתקרב ואתה יודע את זה", features:['בדיקה ע"י עו"ד מנוסה','הערות כתובות מפורטות','ניתוח חוזקות וחולשות','כתישה בטון נעים','עדיפות בתור'] },
+  { id:3, name:"SOS 🔥", price:200, salePrice:175, hours:36, accent:"#ef4444", glowBg:"rgba(239,68,68,0.09)", glowBorder:"rgba(239,68,68,0.55)", tagline:"ההגשה עוד רגע? אנחנו לא שופטים. קצת כן.", features:['בדיקה ע"י עו"ד מנוסה','הערות כתובות מפורטות','ניתוח חוזקות וחולשות','כתישה בטון נעים','עדיפות מקסימלית'], recommended:true },
 ];
 
 // ← שינוי 2: רשימת מוסדות מורחבת
@@ -629,7 +629,8 @@ export default function App() {
           {/* כרטיס תשלום */}
           <div style={{background:"#fff",border:"2px solid rgba(220,38,38,.2)",borderRadius:"18px",padding:"24px",marginBottom:"20px",boxShadow:"0 8px 32px rgba(220,38,38,.08)"}}>
             <p style={{fontSize:"13px",color:"#a8a29e",fontWeight:700,margin:"0 0 6px",letterSpacing:".05em"}}>סכום לתשלום</p>
-            {curPlan&&<div style={{fontSize:"2.8rem",fontWeight:900,color:"#dc2626",margin:"0 0 4px",lineHeight:1}}>₪{curPlan.price}</div>}
+            {curPlan&&<div style={{fontSize:"2.8rem",fontWeight:900,color:"#dc2626",margin:"0 0 2px",lineHeight:1}}>₪{curPlan.salePrice}</div>}
+            {curPlan&&<div style={{fontSize:"14px",color:"#ccc5b9",textDecoration:"line-through",marginBottom:"4px"}}>₪{curPlan.price}</div>}
             {curPlan&&<div style={{fontSize:"13px",color:"#a8a29e",marginBottom:"20px"}}>מסלול {curPlan.name} · זמן תגובה {fmtPlanTime(curPlan.hours)} מרגע התשלום</div>}
             {/* מובייל = כפתור, דסקטופ = QR */}
             {isMobileDevice ? (
@@ -721,10 +722,15 @@ export default function App() {
                   <div style={{flex:1,marginBottom:"22px"}}>
                     <h3 style={{fontSize:"1.35rem",fontWeight:900,color:plan.accent,marginBottom:"10px"}}>{plan.name}</h3>
                     <p style={{fontSize:"13px",color:"#57534e",lineHeight:1.6,marginBottom:"18px"}}>{plan.tagline}</p>
-                    <div style={{fontSize:"2.6rem",fontWeight:900,lineHeight:1,color:"#1a1510"}}>₪{plan.price}</div>
-                    <div style={{fontSize:"12px",color:"#a8a29e",marginTop:"6px"}}>בתוך {fmtPlanTime(plan.hours)}</div>
+                    {/* מחיר מבצע השקה */}
+                    <div style={{display:"flex",alignItems:"baseline",gap:"10px",marginBottom:"2px"}}>
+                      <div style={{fontSize:"2.6rem",fontWeight:900,lineHeight:1,color:"#1a1510"}}>₪{plan.salePrice}</div>
+                      <div style={{fontSize:"1.2rem",fontWeight:700,color:"#ccc5b9",textDecoration:"line-through"}}>₪{plan.price}</div>
+                    </div>
+                    <div style={{display:"inline-block",background:"rgba(22,163,74,.08)",border:"1px solid rgba(22,163,74,.25)",borderRadius:"100px",padding:"2px 10px",fontSize:"11px",color:"#16a34a",fontWeight:700,marginBottom:"6px"}}>🏷️ מחיר השקה</div>
+                    <div style={{fontSize:"12px",color:"#a8a29e",marginTop:"4px"}}>בתוך {fmtPlanTime(plan.hours)}</div>
                   </div>
-                  <button style={{width:"100%",padding:"12px",borderRadius:"9px",border:isSel?"none":"1px solid #e0d8cc",background:isSel?plan.accent:"rgba(0,0,0,.03)",color:isSel?"#fff":"#a8a29e",fontFamily:"'Heebo',sans-serif",fontWeight:700,fontSize:"13px",cursor:"pointer",transition:"all .18s"}}>
+                  <button style={{width:"100%",padding:"12px",borderRadius:"9px",border:"none",background:isSel?plan.accent:`${plan.accent}22`,color:isSel?"#fff":plan.accent,fontFamily:"'Heebo',sans-serif",fontWeight:700,fontSize:"13px",cursor:"pointer",transition:"all .18s"}}>
                     {isSel?"✓ נבחר — גלול לטופס ↓":"לבחירת מסלול זה ↓"}
                   </button>
                 </div>
@@ -763,7 +769,7 @@ export default function App() {
                       cursor:"pointer",
                       transition:"all .18s",
                     }}>
-                      {p.name} · ₪{p.price}
+                      {p.name}
                     </span>
                   );
                 })}
