@@ -323,7 +323,7 @@ export default function App() {
   },[view,loadOrders]);
 
   const doLogin=()=>{
-    if(uname==="admin"&&pwd==="1234"){
+    if(uname==="admin"&&pwd===import.meta.env.VITE_ADMIN_PASSWORD){
       try{sessionStorage.setItem('lr_auth','1');}catch{}
       window.location.hash='admin';
       setLoginOpen(false);setView("admin");setLerr("");setUname("");setPwd("");
